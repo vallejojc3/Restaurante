@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administrar Mesas - Restaurante</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+
+        .navbar {
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .nav-menu {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .nav-link {
+            color: #1e293b;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            background: #f1f5f9;
+        }
+
+        .nav-logout {
+            color: #ef4444;
+        }
+
+        .nav-user {
+            color: #64748b;
+            font-size: 0.9rem;
+            padding: 0.5rem 1rem;
+            background: #f1f5f9;
+            border-radius: 0.5rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+        }
+
+        .page-header {
+            margin-bottom: 2rem;
+        }
+
+        .btn-back {
+            display: inline-block;
+            margin-bottom: 1rem;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .page-header h1 {
+            font-size: 2.5rem;
+            color: #1e293b;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 0.75rem;
+            margin-bottom: 1rem;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 4px solid #10b981;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border-left: 4px solid #ef4444;
+        }
+
+        .admin-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 2rem;
+        }
+
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .card h2 {
+            margin-bottom: 1.5rem;
+            color: #1e293b;
+            font-size: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #d97706;
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+        }
+
+        .mesas-list {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .mesa-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.25rem;
+            background: #f8fafc;
+            border-radius: 0.75rem;
+            border-left: 4px solid #667eea;
+        }
+
+        .mesa-item.inactiva {
+            opacity: 0.5;
+            border-left-color: #94a3b8;
+        }
+
+        .mesa-info h3 {
+            font-size: 1.2rem;
+            color: #1e293b;
+            margin-bottom: 0.25rem;
+        }
+
+        .mesa-info p {
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+
+        .mesa-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .badge {
+            padding: 0.35rem 0.85rem;
+            border-radius: 1rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        .badge-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-secondary {
+            background: #e2e8f0;
+            color: #64748b;
+        }
+
+        @media (max-width: 968px) {
+            .admin-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">🍽️ Restaurante</div>
+            <div class="nav-menu">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('administrar_usuarios') }}" class="nav-link">Usuarios</a>
+                <span class="nav-user">👤 {{ current_user.nombre }}</span>
+                <a href="{{ url_for('logout') }}" class="nav-link nav-logout">Salir</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="page-header">
+            <a href="{{ url_for('dashboard') }}" class="btn-back">← Volver</a>
+            <h1>🪑 Administrar Mesas</h1>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="admin-grid">
+            <!-- Formulario para agregar mesa -->
+            <div class="card">
+                <h2>➕ Nueva Mesa</h2>
+                <form method="POST">
+                    <input type="hidden" name="accion" value="agregar">
+                    
+                    <div class="form-group">
+                        <label for="numero">Número de Mesa *</label>
+                        <input type="number" id="numero" name="numero" required min="1" placeholder="Ej: 1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="capacidad">Capacidad (personas)</label>
+                        <input type="number" id="capacidad" name="capacidad" value="4" min="1" placeholder="Ej: 4">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Agregar Mesa</button>
+                </form>
+            </div>
+
+            <!-- Lista de mesas -->
+            <div class="card">
+                <h2>📋 Mesas Existentes ({{ mesas|length }})</h2>
+                
+                {% if mesas %}
+                <div class="mesas-list">
+                    {% for mesa in mesas %}
+                    <div class="mesa-item {% if not mesa.activa %}inactiva{% endif %}">
+                        <div class="mesa-info">
+                            <h3>
+                                Mesa {{ mesa.numero }}
+                                {% if mesa.activa %}
+                                <span class="badge badge-success">Activa</span>
+                                {% else %}
+                                <span class="badge badge-secondary">Inactiva</span>
+                                {% endif %}
+                            </h3>
+                            <p>Capacidad: {{ mesa.capacidad }} personas</p>
+                        </div>
+                        
+                        <div class="mesa-actions">
+                            <form method="POST" style="display: inline;">
+                                <input type="hidden" name="accion" value="toggle">
+                                <input type="hidden" name="mesa_id" value="{{ mesa.id }}">
+                                <button type="submit" class="btn btn-warning btn-sm">
+                                    {% if mesa.activa %}Desactivar{% else %}Activar{% endif %}
+                                </button>
+                            </form>
+                            
+                            <form method="POST" style="display: inline;" onsubmit="return confirm('¿Eliminar esta mesa?')">
+                                <input type="hidden" name="accion" value="eliminar">
+                                <input type="hidden" name="mesa_id" value="{{ mesa.id }}">
+                                <button type="submit" class="btn btn-danger btn-sm">Eliminar</button>
+                            </form>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p style="text-align: center; color: #64748b; padding: 2rem;">No hay mesas creadas</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

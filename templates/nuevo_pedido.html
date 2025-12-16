@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nuevo Pedido - Mesa {{ mesa.numero }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+
+        .navbar {
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+        }
+
+        .page-header {
+            margin-bottom: 2rem;
+        }
+
+        .btn-back {
+            display: inline-block;
+            margin-bottom: 1rem;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .btn-back:hover {
+            text-decoration: underline;
+        }
+
+        .page-header h1 {
+            font-size: 2rem;
+            color: #1e293b;
+        }
+
+        .form-container {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.875rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #64748b;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #475569;
+        }
+
+        .menu-sugerencias {
+            margin-top: 3rem;
+        }
+
+        .menu-sugerencias h3 {
+            margin-bottom: 1.5rem;
+            color: #1e293b;
+            font-size: 1.3rem;
+        }
+
+        .sugerencias-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .sugerencia-btn {
+            padding: 1rem;
+            border: 2px solid #e2e8f0;
+            background: white;
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        .sugerencia-btn:hover {
+            border-color: #667eea;
+            background: #f1f5f9;
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .form-container {
+                padding: 1.5rem;
+            }
+
+            .form-actions {
+                flex-direction: column;
+            }
+
+            .sugerencias-grid {
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">🍽️ Restaurante</div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="page-header">
+            <a href="{{ url_for('ver_mesa', mesa_id=mesa.id) }}" class="btn-back">← Volver a Mesa {{ mesa.numero }}</a>
+            <h1>Nuevo Pedido - Mesa {{ mesa.numero }}</h1>
+        </div>
+
+        <div class="form-container">
+            <form method="POST" class="pedido-form">
+                <div class="form-group">
+                    <label for="producto">Producto *</label>
+                    <input type="text" id="producto" name="producto" required autofocus 
+                           placeholder="Ej: Hamburguesa con papas">
+                </div>
+                
+                <div class="form-group">
+                    <label for="cantidad">Cantidad *</label>
+                    <input type="number" id="cantidad" name="cantidad" value="1" min="1" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="notas">Notas adicionales</label>
+                    <textarea id="notas" name="notas" rows="3" 
+                              placeholder="Ej: Sin cebolla, término medio, etc."></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">✓ Agregar Pedido</button>
+                    <a href="{{ url_for('ver_mesa', mesa_id=mesa.id) }}" class="btn btn-secondary">Cancelar</a>
+                </div>
+            </form>
+        </div>
+
+        <div class="menu-sugerencias">
+            <h3>📋 Productos Populares</h3>
+            <div class="sugerencias-grid">
+                <button type="button" class="sugerencia-btn" onclick="setProducto('Hamburguesa Clásica')">🍔 Hamburguesa</button>
+                <button type="button" class="sugerencia-btn" onclick="setProducto('Pizza Margherita')">🍕 Pizza</button>
+                <button type="button" class="sugerencia-btn" onclick="setProducto('Ensalada César')">🥗 Ensalada</button>
+                <button type="button" class="sugerencia-btn" onclick="setProducto('Pasta Carbonara')">🍝 Pasta</button>
+                <button type="button" class="sugerencia-btn" onclick="setProducto('Tacos al Pastor')">🌮 Tacos</button>
+                <button type="button" class="sugerencia-btn" onclick="setProducto('Alitas BBQ')">🍗 Alitas</button>
+                <button type="button" class="sugerencia-btn" onclick="setProducto('Cerveza')">🍺 Cerveza</button>
+                <button type="button" class="sugerencia-btn" onclick="setProducto('Refresco')">🥤 Refresco</button>
+                <button type="button" class="sugerencia-btn" onclick="setProducto('Agua')">💧 Agua</button>
+                <button type="button" class="sugerencia-btn" onclick="setProducto('Café')">☕ Café</button>
+                <button type="button" class="sugerencia-btn" onclick="setProducto('Postre del día')">🍰 Postre</button>
+                <button type="button" class="sugerencia-btn" onclick="setProducto('Jugo Natural')">🧃 Jugo</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function setProducto(nombre) {
+            document.getElementById('producto').value = nombre;
+            document.getElementById('producto').focus();
+        }
+    </script>
+</body>
+</html>
