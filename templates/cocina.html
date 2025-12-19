@@ -291,7 +291,7 @@
         </div>
 
         <div class="refresh-notice">
-            🔄 Esta página se actualiza automáticamente cada 30 segundos
+            🔄 Esta página se actualiza automáticamente cada 10 segundos
         </div>
 
         <div class="cocina-container">
@@ -339,13 +339,13 @@
     </div>
 
     <script>
-        // Auto-refresh cada 30 segundos
+        // Auto-refresh cada 10 segundos
         setTimeout(function() {
             location.reload();
-        }, 30000);
+        }, 10000);
 
         // Mostrar contador regresivo
-        let seconds = 30;
+        let seconds = 10;
         const notice = document.querySelector('.refresh-notice');
         const originalText = notice.textContent;
         

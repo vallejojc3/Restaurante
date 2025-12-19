@@ -508,7 +508,7 @@
         <!-- Navegación de fechas -->
         <div class="fecha-navegacion">
             <h3>🗓️ Seleccionar Fecha</h3>
-            <form action="{{ url_for('historial') }}" method="GET" class="fecha-controls">
+            <form method="GET" class="fecha-controls">
                 <input type="date" name="fecha" id="fecha" 
                        value="{{ fecha_seleccionada.strftime('%Y-%m-%d') if fecha_seleccionada else '' }}"
                        max="{{ now.strftime('%Y-%m-%d') if now else '' }}">
@@ -516,7 +516,12 @@
             </form>
             {% if fecha_seleccionada %}
             <div class="fecha-actual">
-                Mostrando: {{ fecha_seleccionada.strftime('%d/%m/%Y') }}
+                📅 Mostrando: {{ fecha_seleccionada.strftime('%d/%m/%Y') }}
+                <a href="{{ url_for('historial') }}" style="margin-left: 1rem; color: #667eea; text-decoration: none;">Ver todos</a>
+            </div>
+            {% else %}
+            <div class="fecha-actual">
+                📅 Mostrando últimos 7 días
             </div>
             {% endif %}
         </div>

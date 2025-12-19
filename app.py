@@ -44,10 +44,21 @@ class Mesa(db.Model):
     capacidad = db.Column(db.Integer, default=4)
     activa = db.Column(db.Boolean, default=True)
 
+class Sesion(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    mesa_id = db.Column(db.Integer, db.ForeignKey('mesa.id'), nullable=False)
+    fecha_inicio = db.Column(db.DateTime, default=datetime.now)
+    fecha_fin = db.Column(db.DateTime, nullable=True)
+    activa = db.Column(db.Boolean, default=True)
+    
+    mesa = db.relationship('Mesa', backref='sesiones')
+    pedidos = db.relationship('Pedido', backref='sesion', lazy=True)
+
 class Pedido(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     fecha = db.Column(db.DateTime, default=datetime.now)
     mesa_id = db.Column(db.Integer, db.ForeignKey('mesa.id'), nullable=False)
+    sesion_id = db.Column(db.Integer, db.ForeignKey('sesion.id'), nullable=True)
     mesero_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
     producto = db.Column(db.String(200), nullable=False)
     cantidad = db.Column(db.Integer, default=1)
@@ -101,33 +112,46 @@ def dashboard():
     
     mesas = Mesa.query.filter_by(activa=True).order_by(Mesa.numero).all()
     
-    # Obtener pedidos de hoy
+    # Obtener solo sesiones activas de hoy
     hoy = datetime.now().date()
-    pedidos_hoy = Pedido.query.filter(
-        db.func.date(Pedido.fecha) == hoy
-    ).order_by(Pedido.fecha.desc()).all()
+    sesiones_activas = Sesion.query.filter(
+        Sesion.activa == True,
+        db.func.date(Sesion.fecha_inicio) == hoy
+    ).all()
     
-    # Agrupar por mesa
-    pedidos_por_mesa = {}
-    for pedido in pedidos_hoy:
-        if pedido.mesa_id not in pedidos_por_mesa:
-            pedidos_por_mesa[pedido.mesa_id] = {
-                'mesa': pedido.mesa,
-                'pedidos': [],
-                'total_pendiente': 0,
-                'pagado': True,
-                'todos_entregados': True
+    # Agrupar por mesa con información de la sesión activa
+    info_mesas = {}
+    for mesa in mesas:
+        # Buscar sesión activa de esta mesa
+        sesion_activa = next((s for s in sesiones_activas if s.mesa_id == mesa.id), None)
+        
+        if sesion_activa:
+            # Obtener pedidos de la sesión activa
+            pedidos = Pedido.query.filter_by(sesion_id=sesion_activa.id).all()
+            
+            info_mesas[mesa.id] = {
+                'mesa': mesa,
+                'sesion': sesion_activa,
+                'pedidos': pedidos,
+                'tiene_pendientes': any(not p.pagado for p in pedidos),
+                'todos_entregados': all(p.estado == 'entregado' for p in pedidos),
+                'total_pedidos': len(pedidos),
+                'hora_inicio': sesion_activa.fecha_inicio.strftime('%H:%M')
             }
-        pedidos_por_mesa[pedido.mesa_id]['pedidos'].append(pedido)
-        if not pedido.pagado:
-            pedidos_por_mesa[pedido.mesa_id]['total_pendiente'] += 1
-            pedidos_por_mesa[pedido.mesa_id]['pagado'] = False
-        if pedido.estado != 'entregado':
-            pedidos_por_mesa[pedido.mesa_id]['todos_entregados'] = False
+        else:
+            info_mesas[mesa.id] = {
+                'mesa': mesa,
+                'sesion': None,
+                'pedidos': [],
+                'tiene_pendientes': False,
+                'todos_entregados': False,
+                'total_pedidos': 0,
+                'hora_inicio': None
+            }
     
     return render_template("dashboard.html", 
                          mesas=mesas, 
-                         pedidos_por_mesa=pedidos_por_mesa,
+                         info_mesas=info_mesas,
                          now=datetime.now())
 
 @app.route("/nuevo_pedido/<int:mesa_id>", methods=["GET", "POST"])
@@ -140,8 +164,21 @@ def nuevo_pedido(mesa_id):
         cantidad = request.form.get("cantidad", 1, type=int)
         notas = request.form.get("notas", "")
         
+        # Buscar o crear sesión activa para esta mesa
+        sesion_activa = Sesion.query.filter_by(
+            mesa_id=mesa_id,
+            activa=True
+        ).first()
+        
+        if not sesion_activa:
+            # Crear nueva sesión
+            sesion_activa = Sesion(mesa_id=mesa_id)
+            db.session.add(sesion_activa)
+            db.session.flush()  # Para obtener el ID
+        
         pedido = Pedido(
             mesa_id=mesa_id,
+            sesion_id=sesion_activa.id,
             mesero_id=current_user.id,
             producto=producto,
             cantidad=cantidad,
@@ -160,14 +197,34 @@ def nuevo_pedido(mesa_id):
 @login_required
 def ver_mesa(mesa_id):
     mesa = Mesa.query.get_or_404(mesa_id)
+    
+    # Obtener sesión activa
+    sesion_activa = Sesion.query.filter_by(
+        mesa_id=mesa_id,
+        activa=True
+    ).first()
+    
+    # Obtener pedidos de la sesión activa
+    pedidos_actuales = []
+    if sesion_activa:
+        pedidos_actuales = Pedido.query.filter_by(
+            sesion_id=sesion_activa.id
+        ).order_by(Pedido.fecha.desc()).all()
+    
+    # Obtener sesiones anteriores de hoy
     hoy = datetime.now().date()
+    sesiones_anteriores = Sesion.query.filter(
+        Sesion.mesa_id == mesa_id,
+        Sesion.activa == False,
+        db.func.date(Sesion.fecha_inicio) == hoy
+    ).order_by(Sesion.fecha_inicio.desc()).all()
     
-    pedidos = Pedido.query.filter(
-        Pedido.mesa_id == mesa_id,
-        db.func.date(Pedido.fecha) == hoy
-    ).order_by(Pedido.fecha.desc()).all()
-    
-    return render_template("ver_mesa.html", mesa=mesa, pedidos=pedidos, current_user=current_user)
+    return render_template("ver_mesa.html", 
+                         mesa=mesa, 
+                         pedidos=pedidos_actuales,
+                         sesion_activa=sesion_activa,
+                         sesiones_anteriores=sesiones_anteriores,
+                         current_user=current_user)
 
 @app.route("/cocina")
 @login_required
@@ -226,6 +283,7 @@ def historial():
     # Obtener fecha del parámetro o usar fecha actual
     fecha_param = request.args.get('fecha')
     fecha_seleccionada = None
+    pedidos_por_dia = {}
     
     if fecha_param:
         try:
@@ -235,7 +293,6 @@ def historial():
                 db.func.date(Pedido.fecha) == fecha_seleccionada
             ).order_by(Pedido.fecha.desc()).all()
             
-            pedidos_por_dia = {}
             if pedidos:
                 fecha_str = fecha_seleccionada.strftime('%Y-%m-%d')
                 pedidos_por_dia[fecha_str] = pedidos
@@ -244,10 +301,9 @@ def historial():
             fecha_seleccionada = None
     
     # Si no hay fecha seleccionada, mostrar últimos 7 días
-    if not fecha_param or not pedidos_por_dia:
+    if not fecha_param:
         pedidos = Pedido.query.order_by(Pedido.fecha.desc()).limit(500).all()
         
-        pedidos_por_dia = {}
         for pedido in pedidos:
             fecha_str = pedido.fecha.strftime('%Y-%m-%d')
             if fecha_str not in pedidos_por_dia:
@@ -358,19 +414,27 @@ def eliminar_usuario(user_id):
 @app.route("/liberar_mesa/<int:mesa_id>")
 @login_required
 def liberar_mesa(mesa_id):
-    """Marca todos los pedidos de una mesa como entregados y pagados"""
-    hoy = datetime.now().date()
-    pedidos = Pedido.query.filter(
-        Pedido.mesa_id == mesa_id,
-        db.func.date(Pedido.fecha) == hoy
-    ).all()
+    """Cierra la sesión activa de una mesa"""
+    sesion_activa = Sesion.query.filter_by(
+        mesa_id=mesa_id,
+        activa=True
+    ).first()
     
-    for pedido in pedidos:
-        pedido.pagado = True
-        pedido.estado = 'entregado'
+    if sesion_activa:
+        # Marcar todos los pedidos como entregados y pagados
+        for pedido in sesion_activa.pedidos:
+            pedido.pagado = True
+            pedido.estado = 'entregado'
+        
+        # Cerrar sesión
+        sesion_activa.activa = False
+        sesion_activa.fecha_fin = datetime.now()
+        
+        db.session.commit()
+        flash(f'Mesa {mesa_id} liberada exitosamente', 'success')
+    else:
+        flash('No hay sesión activa para esta mesa', 'error')
     
-    db.session.commit()
-    flash(f'Mesa {mesa_id} liberada exitosamente', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route("/historial/<fecha>")

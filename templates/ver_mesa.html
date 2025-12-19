@@ -101,17 +101,55 @@
             color: #1e293b;
         }
 
-        .mesa-info-card {
+        .sesion-container {
+            margin-bottom: 2rem;
+            padding: 1.5rem;
             background: white;
-            padding: 2rem;
             border-radius: 1rem;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
 
-        .mesa-info-card h2 {
-            margin-bottom: 1.5rem;
+        .sesion-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .sesion-titulo {
+            font-size: 1.2rem;
+            font-weight: 600;
             color: #1e293b;
-            font-size: 1.5rem;
+        }
+
+        .sesion-tiempo {
+            font-size: 0.9rem;
+            color: #64748b;
+        }
+
+        .sesion-badge {
+            padding: 0.35rem 0.85rem;
+            border-radius: 1rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: #10b981;
+            color: white;
+        }
+
+        .sesion-badge.cerrada {
+            background: #94a3b8;
+        }
+
+        .sesiones-anteriores {
+            margin-top: 2rem;
+        }
+
+        .sesiones-anteriores h3 {
+            color: #64748b;
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
         }
 
         .pedidos-detalle {
@@ -324,40 +362,6 @@
             font-size: 1.1rem;
         }
 
-        .sesiones-anteriores {
-            margin-top: 2rem;
-            padding-top: 2rem;
-            border-top: 2px solid #e2e8f0;
-        }
-
-        .sesiones-anteriores h3 {
-            margin-bottom: 1rem;
-            color: #64748b;
-            font-size: 1.2rem;
-        }
-
-        .sesion-card {
-            background: #fafafa;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            margin-bottom: 1rem;
-            border-left: 3px solid #94a3b8;
-        }
-
-        .sesion-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 0.5rem;
-            font-size: 0.9rem;
-            color: #64748b;
-        }
-
-        .sesion-stats {
-            display: flex;
-            gap: 1rem;
-            font-size: 0.85rem;
-        }
-
         .empty-state {
             text-align: center;
             padding: 3rem 1rem;
@@ -407,8 +411,16 @@
             <h1>Mesa {{ mesa.numero }}</h1>
         </div>
 
-        <div class="mesa-info-card">
-            <h2>📋 Pedidos de Hoy</h2>
+        <!-- Sesión Activa -->
+        {% if sesion_activa %}
+        <div class="sesion-container">
+            <div class="sesion-header">
+                <div>
+                    <div class="sesion-titulo">🟢 Sesión Activa</div>
+                    <div class="sesion-tiempo">Desde: {{ sesion_activa.fecha_inicio.strftime('%H:%M') }}</div>
+                </div>
+                <span class="sesion-badge">Activa</span>
+            </div>
             
             {% if pedidos %}
             <div class="pedidos-detalle">
@@ -464,7 +476,7 @@
                 </div>
                 <div class="summary-item">
                     <strong>{{ pedidos|selectattr('pagado', 'equalto', False)|list|length }}</strong>
-                    <span>Pendientes de Pago</span>
+                    <span>Por Pagar</span>
                 </div>
                 <div class="summary-item">
                     <strong>{{ pedidos|selectattr('estado', 'equalto', 'entregado')|list|length }}</strong>
@@ -474,11 +486,50 @@
             {% else %}
             <div class="empty-state">
                 <div class="empty-icon">🍽️</div>
-                <h3>No hay pedidos para esta mesa hoy</h3>
-                <p>Agrega el primer pedido usando el botón de abajo</p>
+                <p>Sin pedidos aún en esta sesión</p>
             </div>
             {% endif %}
         </div>
+        {% else %}
+        <div class="sesion-container">
+            <div class="empty-state">
+                <div class="empty-icon">💤</div>
+                <h3>Mesa disponible</h3>
+                <p>No hay clientes en esta mesa actualmente</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Sesiones Anteriores del Día -->
+        {% if sesiones_anteriores %}
+        <div class="sesiones-anteriores">
+            <h3>📜 Sesiones Anteriores de Hoy</h3>
+            {% for sesion in sesiones_anteriores %}
+            <div class="sesion-container" style="opacity: 0.8;">
+                <div class="sesion-header">
+                    <div>
+                        <div class="sesion-titulo">Sesión {{ loop.index }}</div>
+                        <div class="sesion-tiempo">
+                            {{ sesion.fecha_inicio.strftime('%H:%M') }} - {{ sesion.fecha_fin.strftime('%H:%M') if sesion.fecha_fin else 'Ahora' }}
+                        </div>
+                    </div>
+                    <span class="sesion-badge cerrada">Cerrada</span>
+                </div>
+                
+                <div class="mesa-summary">
+                    <div class="summary-item">
+                        <strong>{{ sesion.pedidos|length }}</strong>
+                        <span>Pedidos</span>
+                    </div>
+                    <div class="summary-item">
+                        <strong>{{ sesion.pedidos|selectattr('pagado', 'equalto', True)|list|length }}</strong>
+                        <span>Pagados</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
     </div>
 
     <div class="mesa-actions-fixed">

@@ -154,14 +154,14 @@
         /* Mesas Grid */
         .mesas-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 1.5rem;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
         }
 
         .mesa-card {
             background: white;
-            border-radius: 1rem;
-            padding: 1.5rem;
+            border-radius: 0.75rem;
+            padding: 1rem;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             transition: all 0.3s;
             border: 2px solid transparent;
@@ -188,14 +188,48 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 1rem;
-            padding-bottom: 1rem;
+            margin-bottom: 0.75rem;
+            padding-bottom: 0.75rem;
             border-bottom: 2px solid #f1f5f9;
         }
 
         .mesa-header h3 {
-            font-size: 1.5rem;
+            font-size: 1.3rem;
             color: #1e293b;
+        }
+
+        .mesa-info-compact {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+            font-size: 0.85rem;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .info-label {
+            color: #64748b;
+            font-weight: 500;
+        }
+
+        .info-value {
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .sesion-tiempo {
+            background: #f1f5f9;
+            padding: 0.35rem 0.6rem;
+            border-radius: 0.4rem;
+            font-size: 0.75rem;
+            color: #64748b;
+            text-align: center;
+            margin-bottom: 0.5rem;
         }
 
         .badge {
@@ -294,10 +328,27 @@
         }
 
         .mesa-actions {
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-            margin-top: 1.25rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.4rem;
+            margin-top: 0.75rem;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 0.5rem 0.75rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-decoration: none;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-block {
+            grid-column: 1 / -1;
         }
 
         /* Buttons */
@@ -429,9 +480,10 @@
         <!-- Mesas Grid -->
         <div class="mesas-grid">
             {% for mesa in mesas %}
+            {% set info = info_mesas[mesa.id] %}
             <div class="mesa-card 
-                {% if mesa.id in pedidos_por_mesa %}
-                    {% if pedidos_por_mesa[mesa.id]['todos_entregados'] and pedidos_por_mesa[mesa.id]['pagado'] %}
+                {% if info.sesion %}
+                    {% if info.todos_entregados and not info.tiene_pendientes %}
                         mesa-completa
                     {% else %}
                         mesa-ocupada
@@ -441,50 +493,54 @@
                 {% endif %}">
                 <div class="mesa-header">
                     <h3>Mesa {{ mesa.numero }}</h3>
-                    {% if mesa.id in pedidos_por_mesa %}
-                        {% if pedidos_por_mesa[mesa.id]['todos_entregados'] and pedidos_por_mesa[mesa.id]['pagado'] %}
-                        <span class="badge badge-info">Completo ✓</span>
-                        {% elif pedidos_por_mesa[mesa.id]['pagado'] %}
-                        <span class="badge badge-success">Pagado ✓</span>
+                    {% if info.sesion %}
+                        {% if info.todos_entregados and not info.tiene_pendientes %}
+                        <span class="badge badge-info">Listo</span>
+                        {% elif info.tiene_pendientes %}
+                        <span class="badge badge-warning">Activa</span>
                         {% else %}
-                        <span class="badge badge-warning">Pendiente</span>
+                        <span class="badge badge-success">Pagado</span>
                         {% endif %}
                     {% else %}
                     <span class="badge badge-secondary">Libre</span>
                     {% endif %}
                 </div>
                 
-                {% if mesa.id in pedidos_por_mesa %}
-                <div class="mesa-pedidos">
-                    <p class="pedidos-count">📋 {{ pedidos_por_mesa[mesa.id]['pedidos']|length }} pedido(s)</p>
-                    
-                    <div class="pedidos-list">
-                        {% for pedido in pedidos_por_mesa[mesa.id]['pedidos'][:3] %}
-                        <div class="pedido-item">
-                            <span class="pedido-producto">{{ pedido.cantidad }}x {{ pedido.producto }}</span>
-                            <span class="estado-badge estado-{{ pedido.estado }}">{{ pedido.estado }}</span>
-                        </div>
-                        {% endfor %}
-                        {% if pedidos_por_mesa[mesa.id]['pedidos']|length > 3 %}
-                        <p class="text-muted">+{{ pedidos_por_mesa[mesa.id]['pedidos']|length - 3 }} más...</p>
-                        {% endif %}
+                {% if info.sesion %}
+                <div class="sesion-tiempo">
+                    ⏰ Desde {{ info.hora_inicio }}
+                </div>
+                
+                <div class="mesa-info-compact">
+                    <div class="info-row">
+                        <span class="info-label">Pedidos:</span>
+                        <span class="info-value">{{ info.total_pedidos }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Pendientes:</span>
+                        <span class="info-value">
+                            {% if info.tiene_pendientes %}
+                            {{ info.pedidos|selectattr('pagado', 'equalto', False)|list|length }} 💰
+                            {% else %}
+                            0 ✓
+                            {% endif %}
+                        </span>
                     </div>
                 </div>
                 {% endif %}
                 
                 <div class="mesa-actions">
                     <a href="{{ url_for('nuevo_pedido', mesa_id=mesa.id) }}" class="btn btn-primary btn-sm">+ Pedido</a>
-                    <a href="{{ url_for('ver_mesa', mesa_id=mesa.id) }}" class="btn btn-secondary btn-sm">Ver Mesa</a>
-                    {% if mesa.id in pedidos_por_mesa %}
-                        {% if not pedidos_por_mesa[mesa.id]['pagado'] %}
+                    <a href="{{ url_for('ver_mesa', mesa_id=mesa.id) }}" class="btn btn-secondary btn-sm">Ver</a>
+                    {% if info.sesion %}
+                        {% if info.tiene_pendientes %}
                         <a href="{{ url_for('pagar_mesa', mesa_id=mesa.id) }}" 
-                           class="btn btn-success btn-sm" 
-                           onclick="return confirm('¿Marcar todos los pedidos como pagados?')">💰 Pagar</a>
-                        {% endif %}
-                        {% if pedidos_por_mesa[mesa.id]['todos_entregados'] and pedidos_por_mesa[mesa.id]['pagado'] %}
+                           class="btn btn-success btn-sm btn-block" 
+                           onclick="return confirm('¿Marcar todo como pagado?')">💰 Pagar Todo</a>
+                        {% elif info.todos_entregados %}
                         <a href="{{ url_for('liberar_mesa', mesa_id=mesa.id) }}" 
-                           class="btn btn-info btn-sm" 
-                           onclick="return confirm('¿Liberar esta mesa?')"
+                           class="btn btn-info btn-sm btn-block" 
+                           onclick="return confirm('¿Liberar mesa para nuevos clientes?')"
                            style="background: #06b6d4;">🔓 Liberar</a>
                         {% endif %}
                     {% endif %}
