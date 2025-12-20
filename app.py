@@ -497,7 +497,9 @@ def init_db():
 # =========================
 
 if __name__ == "__main__":
-    # Solo inicializar BD en desarrollo local
-    if os.environ.get('RAILWAY_ENVIRONMENT') != 'production':
+    # Inicializar base de datos en todos los entornos si no existe
+    if not os.path.exists(os.path.join(basedir, 'restaurante.db')):
         init_db()
+    
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+
