@@ -497,5 +497,7 @@ def init_db():
 # =========================
 
 if __name__ == "__main__":
-    init_db()
-    app.run(debug=True)
+    # Solo inicializar BD en desarrollo local
+    if os.environ.get('RAILWAY_ENVIRONMENT') != 'production':
+        init_db()
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
