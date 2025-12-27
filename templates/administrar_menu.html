@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administrar Menú - Restaurante</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+
+        .navbar {
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .nav-brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .nav-menu {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .nav-link {
+            color: #1e293b;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            background: #f1f5f9;
+        }
+
+        .nav-logout {
+            color: #ef4444;
+        }
+
+        .nav-user {
+            color: #64748b;
+            font-size: 0.9rem;
+            padding: 0.5rem 1rem;
+            background: #f1f5f9;
+            border-radius: 0.5rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+        }
+
+        .page-header {
+            margin-bottom: 2rem;
+        }
+
+        .btn-back {
+            display: inline-block;
+            margin-bottom: 1rem;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .page-header h1 {
+            font-size: 2.5rem;
+            color: #1e293b;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 0.75rem;
+            margin-bottom: 1rem;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 4px solid #10b981;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border-left: 4px solid #ef4444;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .tab {
+            padding: 1rem 2rem;
+            background: none;
+            border: none;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #64748b;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .admin-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 2rem;
+        }
+
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .card h2 {
+            margin-bottom: 1.5rem;
+            color: #1e293b;
+            font-size: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #d97706;
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+        }
+
+        .items-list,
+        .categorias-list {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .item-row,
+        .categoria-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.25rem;
+            background: #f8fafc;
+            border-radius: 0.75rem;
+            border-left: 4px solid #667eea;
+            gap: 1rem;
+        }
+
+        .item-row.no-disponible {
+            opacity: 0.6;
+            border-left-color: #94a3b8;
+        }
+
+        .item-info,
+        .categoria-info {
+            flex: 1;
+        }
+
+        .item-info h3,
+        .categoria-info h3 {
+            font-size: 1.2rem;
+            color: #1e293b;
+            margin-bottom: 0.25rem;
+        }
+
+        .item-info p,
+        .categoria-info p {
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+
+        .item-precio {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .item-actions,
+        .categoria-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            padding: 0.35rem 0.85rem;
+            border-radius: 1rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .btn-view-menu {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 3rem;
+            text-decoration: none;
+            font-weight: 600;
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+
+        .btn-view-menu:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 28px rgba(102, 126, 234, 0.5);
+        }
+
+        @media (max-width: 968px) {
+            .admin-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .item-row,
+            .categoria-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .item-actions,
+            .categoria-actions {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">🍽️ Restaurante</div>
+            <div class="nav-menu">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('administrar_mesas') }}" class="nav-link">Mesas</a>
+                <a href="{{ url_for('administrar_usuarios') }}" class="nav-link">Usuarios</a>
+                <span class="nav-user">👤 {{ current_user.nombre }}</span>
+                <a href="{{ url_for('logout') }}" class="nav-link nav-logout">Salir</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="page-header">
+            <a href="{{ url_for('dashboard') }}" class="btn-back">← Volver</a>
+            <h1>📋 Administrar Menú</h1>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('categorias')">Categorías</button>
+            <button class="tab" onclick="showTab('items')">Platillos</button>
+        </div>
+
+        <!-- TAB CATEGORÍAS -->
+        <div id="categorias" class="tab-content active">
+            <div class="admin-grid">
+                <div class="card">
+                    <h2>➕ Nueva Categoría</h2>
+                    <form method="POST" action="{{ url_for('agregar_categoria') }}">
+                        <div class="form-group">
+                            <label for="nombre">Nombre *</label>
+                            <input type="text" id="nombre" name="nombre" required placeholder="Ej: Entradas">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="orden">Orden</label>
+                            <input type="number" id="orden" name="orden" value="0" min="0">
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">Agregar Categoría</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2>📂 Categorías ({{ categorias|length }})</h2>
+
+                    {% if categorias %}
+                    <div class="categorias-list">
+                        {% for categoria in categorias %}
+                        <div class="categoria-row">
+                            <div class="categoria-info">
+                                <h3>{{ categoria.nombre }}</h3>
+                                <p>{{ categoria.items|length }} platillos | Orden: {{ categoria.orden }}</p>
+                            </div>
+
+                            <div class="categoria-actions">
+                                <form method="POST" action="{{ url_for('eliminar_categoria', categoria_id=categoria.id) }}" style="display: inline;">
+                                    <button type="submit" class="btn btn-danger btn-sm" 
+                                            onclick="return confirm('¿Eliminar esta categoría?')">
+                                        Eliminar
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p style="text-align: center; color: #64748b; padding: 2rem;">No hay categorías creadas</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB PLATILLOS -->
+        <div id="items" class="tab-content">
+            <div class="admin-grid">
+                <div class="card">
+                    <h2>➕ Nuevo Platillo</h2>
+                    <form method="POST" action="{{ url_for('agregar_item') }}">
+                        <div class="form-group">
+                            <label for="item-nombre">Nombre *</label>
+                            <input type="text" id="item-nombre" name="nombre" required placeholder="Ej: Hamburguesa Clásica">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="descripcion">Descripción</label>
+                            <textarea id="descripcion" name="descripcion" placeholder="Describe el platillo..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="precio">Precio *</label>
+                            <input type="number" id="precio" name="precio" step="0.01" min="0" required placeholder="0.00">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="categoria_id">Categoría *</label>
+                            <select id="categoria_id" name="categoria_id" required>
+                                <option value="">Seleccionar...</option>
+                                {% for cat in categorias %}
+                                <option value="{{ cat.id }}">{{ cat.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="imagen_url">URL de Imagen (opcional)</label>
+                            <input type="text" id="imagen_url" name="imagen_url" placeholder="https://...">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="item-orden">Orden</label>
+                            <input type="number" id="item-orden" name="orden" value="0" min="0">
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">Agregar Platillo</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2>🍴 Platillos ({{ items|length }})</h2>
+
+                    {% if items %}
+                    <div class="items-list">
+                        {% for item in items %}
+                        <div class="item-row {% if not item.disponible %}no-disponible{% endif %}">
+                            <div class="item-info">
+                                <h3>
+                                    {{ item.nombre }}
+                                    {% if item.disponible %}
+                                    <span class="badge badge-success">Disponible</span>
+                                    {% else %}
+                                    <span class="badge badge-warning">No disponible</span>
+                                    {% endif %}
+                                </h3>
+                                <p>{{ item.categoria.nombre }} | Orden: {{ item.orden }}</p>
+                                {% if item.descripcion %}
+                                <p style="margin-top: 0.5rem;">{{ item.descripcion[:50] }}...</p>
+                                {% endif %}
+                            </div>
+
+                            <div class="item-precio">${{ "%.2f"|format(item.precio) }}</div>
+
+                            <div class="item-actions">
+                                <a href="{{ url_for('toggle_item', item_id=item.id) }}" class="btn btn-warning btn-sm">
+                                    {% if item.disponible %}Ocultar{% else %}Mostrar{% endif %}
+                                </a>
+
+                                <form method="POST" action="{{ url_for('eliminar_item', item_id=item.id) }}" style="display: inline;">
+                                    <button type="submit" class="btn btn-danger btn-sm" 
+                                            onclick="return confirm('¿Eliminar este platillo?')">
+                                        Eliminar
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p style="text-align: center; color: #64748b; padding: 2rem;">No hay platillos creados</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <a href="{{ url_for('menu_publico') }}" class="btn-view-menu" target="_blank">👁️ Ver Menú Público</a>
+
+    <script>
+        function showTab(tabName) {
+            // Ocultar todos los tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Mostrar el tab seleccionado
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+    </script>
+</body>
+</html>

@@ -69,6 +69,24 @@ class Pedido(db.Model):
     mesa = db.relationship('Mesa', backref='pedidos')
     mesero = db.relationship('Usuario', backref='pedidos')
 
+class CategoriaMenu(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(100), nullable=False)
+    orden = db.Column(db.Integer, default=0)
+    activa = db.Column(db.Boolean, default=True)
+    
+    items = db.relationship('ItemMenu', backref='categoria', lazy=True, cascade='all, delete-orphan')
+
+class ItemMenu(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(200), nullable=False)
+    descripcion = db.Column(db.Text)
+    precio = db.Column(db.Float, nullable=False)
+    categoria_id = db.Column(db.Integer, db.ForeignKey('categoria_menu.id'), nullable=False)
+    disponible = db.Column(db.Boolean, default=True)
+    imagen_url = db.Column(db.String(500))
+    orden = db.Column(db.Integer, default=0)
+
 @login_manager.user_loader
 def load_user(user_id):
     return Usuario.query.get(int(user_id))
@@ -458,6 +476,145 @@ def historial_fecha(fecha):
                          fecha_seleccionada=fecha_obj)
 
 # =========================
+# RUTAS DEL MENÚ PÚBLICO
+# =========================
+
+@app.route("/menu")
+def menu_publico():
+    """Menú público accesible sin login"""
+    categorias = CategoriaMenu.query.filter_by(activa=True).order_by(CategoriaMenu.orden).all()
+    return render_template("menu_publico.html", categorias=categorias)
+
+@app.route("/administrar_menu")
+@login_required
+def administrar_menu():
+    """Panel de administración del menú"""
+    if current_user.rol != 'admin':
+        flash('Solo los administradores pueden gestionar el menú', 'error')
+        return redirect(url_for('dashboard'))
+    
+    categorias = CategoriaMenu.query.order_by(CategoriaMenu.orden).all()
+    items = ItemMenu.query.order_by(ItemMenu.categoria_id, ItemMenu.orden).all()
+    
+    return render_template("administrar_menu.html", categorias=categorias, items=items)
+
+@app.route("/agregar_categoria", methods=["POST"])
+@login_required
+def agregar_categoria():
+    if current_user.rol != 'admin':
+        flash('Solo los administradores pueden agregar categorías', 'error')
+        return redirect(url_for('dashboard'))
+    
+    nombre = request.form.get("nombre")
+    orden = request.form.get("orden", 0, type=int)
+    
+    categoria = CategoriaMenu(nombre=nombre, orden=orden)
+    db.session.add(categoria)
+    db.session.commit()
+    
+    flash(f'Categoría "{nombre}" agregada exitosamente', 'success')
+    return redirect(url_for('administrar_menu'))
+
+@app.route("/agregar_item", methods=["POST"])
+@login_required
+def agregar_item():
+    if current_user.rol != 'admin':
+        flash('Solo los administradores pueden agregar items', 'error')
+        return redirect(url_for('dashboard'))
+    
+    nombre = request.form.get("nombre")
+    descripcion = request.form.get("descripcion", "")
+    precio = request.form.get("precio", type=float)
+    categoria_id = request.form.get("categoria_id", type=int)
+    imagen_url = request.form.get("imagen_url", "")
+    orden = request.form.get("orden", 0, type=int)
+    
+    item = ItemMenu(
+        nombre=nombre,
+        descripcion=descripcion,
+        precio=precio,
+        categoria_id=categoria_id,
+        imagen_url=imagen_url,
+        orden=orden
+    )
+    
+    db.session.add(item)
+    db.session.commit()
+    
+    flash(f'Platillo "{nombre}" agregado exitosamente', 'success')
+    return redirect(url_for('administrar_menu'))
+
+@app.route("/editar_item/<int:item_id>", methods=["POST"])
+@login_required
+def editar_item(item_id):
+    if current_user.rol != 'admin':
+        flash('Solo los administradores pueden editar items', 'error')
+        return redirect(url_for('dashboard'))
+    
+    item = ItemMenu.query.get_or_404(item_id)
+    
+    item.nombre = request.form.get("nombre")
+    item.descripcion = request.form.get("descripcion", "")
+    item.precio = request.form.get("precio", type=float)
+    item.categoria_id = request.form.get("categoria_id", type=int)
+    item.imagen_url = request.form.get("imagen_url", "")
+    item.orden = request.form.get("orden", 0, type=int)
+    
+    db.session.commit()
+    
+    flash(f'Platillo "{item.nombre}" actualizado', 'success')
+    return redirect(url_for('administrar_menu'))
+
+@app.route("/toggle_item/<int:item_id>")
+@login_required
+def toggle_item(item_id):
+    if current_user.rol != 'admin':
+        flash('Solo los administradores pueden modificar items', 'error')
+        return redirect(url_for('dashboard'))
+    
+    item = ItemMenu.query.get_or_404(item_id)
+    item.disponible = not item.disponible
+    db.session.commit()
+    
+    estado = "disponible" if item.disponible else "no disponible"
+    flash(f'"{item.nombre}" marcado como {estado}', 'success')
+    return redirect(url_for('administrar_menu'))
+
+@app.route("/eliminar_item/<int:item_id>", methods=["POST"])
+@login_required
+def eliminar_item(item_id):
+    if current_user.rol != 'admin':
+        flash('Solo los administradores pueden eliminar items', 'error')
+        return redirect(url_for('dashboard'))
+    
+    item = ItemMenu.query.get_or_404(item_id)
+    nombre = item.nombre
+    db.session.delete(item)
+    db.session.commit()
+    
+    flash(f'"{nombre}" eliminado del menú', 'success')
+    return redirect(url_for('administrar_menu'))
+
+@app.route("/eliminar_categoria/<int:categoria_id>", methods=["POST"])
+@login_required
+def eliminar_categoria(categoria_id):
+    if current_user.rol != 'admin':
+        flash('Solo los administradores pueden eliminar categorías', 'error')
+        return redirect(url_for('dashboard'))
+    
+    categoria = CategoriaMenu.query.get_or_404(categoria_id)
+    
+    if categoria.items:
+        flash(f'No se puede eliminar "{categoria.nombre}" porque tiene platillos asociados', 'error')
+    else:
+        nombre = categoria.nombre
+        db.session.delete(categoria)
+        db.session.commit()
+        flash(f'Categoría "{nombre}" eliminada', 'success')
+    
+    return redirect(url_for('administrar_menu'))
+
+# =========================
 # INICIALIZACIÓN
 # =========================
 
@@ -497,9 +654,5 @@ def init_db():
 # =========================
 
 if __name__ == "__main__":
-    # Inicializar base de datos en todos los entornos si no existe
-    if not os.path.exists(os.path.join(basedir, 'restaurante.db')):
-        init_db()
-    
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
-
+    init_db()
+    app.run(debug=True)
