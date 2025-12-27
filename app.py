@@ -49,6 +49,7 @@ class Sesion(db.Model):
     mesa_id = db.Column(db.Integer, db.ForeignKey('mesa.id'), nullable=False)
     fecha_inicio = db.Column(db.DateTime, default=datetime.now)
     fecha_fin = db.Column(db.DateTime, nullable=True)
+    total = db.Column(db.Float, default=0)  # NUEVO CAMPO para guardar el total
     activa = db.Column(db.Boolean, default=True)
     
     mesa = db.relationship('Mesa', backref='sesiones')
@@ -62,12 +63,18 @@ class Pedido(db.Model):
     mesero_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
     producto = db.Column(db.String(200), nullable=False)
     cantidad = db.Column(db.Integer, default=1)
+    precio_unitario = db.Column(db.Float, default=0)  # NUEVO CAMPO
     notas = db.Column(db.Text)
     estado = db.Column(db.String(20), default='pendiente')  # pendiente, preparando, listo, entregado
     pagado = db.Column(db.Boolean, default=False)
     
     mesa = db.relationship('Mesa', backref='pedidos')
     mesero = db.relationship('Usuario', backref='pedidos')
+    
+    @property
+    def total(self):
+        """Calcula el total del pedido"""
+        return self.cantidad * self.precio_unitario
 
 class CategoriaMenu(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -180,6 +187,7 @@ def nuevo_pedido(mesa_id):
     if request.method == "POST":
         producto = request.form.get("producto")
         cantidad = request.form.get("cantidad", 1, type=int)
+        precio_unitario = request.form.get("precio_unitario", 0, type=float)
         notas = request.form.get("notas", "")
         
         # Buscar o crear sesión activa para esta mesa
@@ -200,16 +208,23 @@ def nuevo_pedido(mesa_id):
             mesero_id=current_user.id,
             producto=producto,
             cantidad=cantidad,
+            precio_unitario=precio_unitario,
             notas=notas
         )
         
         db.session.add(pedido)
         db.session.commit()
         
-        flash(f'Pedido agregado a la Mesa {mesa.numero}', 'success')
+        total = precio_unitario * cantidad
+        flash(f'Pedido agregado: {cantidad}x {producto} = ${total:.2f}', 'success')
         return redirect(url_for('ver_mesa', mesa_id=mesa_id))
     
-    return render_template("nuevo_pedido.html", mesa=mesa)
+    # Obtener todos los items del menú disponibles, agrupados por categoría
+    items_menu = ItemMenu.query.filter_by(disponible=True).order_by(
+        ItemMenu.categoria_id, ItemMenu.orden
+    ).all()
+    
+    return render_template("nuevo_pedido.html", mesa=mesa, items_menu=items_menu)
 
 @app.route("/mesa/<int:mesa_id>")
 @login_required
@@ -222,14 +237,30 @@ def ver_mesa(mesa_id):
         activa=True
     ).first()
     
-    # Obtener pedidos de la sesión activa
+    # Obtener pedidos de la sesión activa y calcular totales
     pedidos_actuales = []
+    totales_sesion_activa = {
+        'total_general': 0,
+        'total_pagado': 0,
+        'total_pendiente': 0
+    }
+    
     if sesion_activa:
         pedidos_actuales = Pedido.query.filter_by(
             sesion_id=sesion_activa.id
         ).order_by(Pedido.fecha.desc()).all()
+        
+        # Calcular totales
+        for pedido in pedidos_actuales:
+            subtotal = pedido.cantidad * pedido.precio_unitario
+            totales_sesion_activa['total_general'] += subtotal
+            
+            if pedido.pagado:
+                totales_sesion_activa['total_pagado'] += subtotal
+            else:
+                totales_sesion_activa['total_pendiente'] += subtotal
     
-    # Obtener sesiones anteriores de hoy
+    # Obtener sesiones anteriores de hoy con sus totales calculados
     hoy = datetime.now().date()
     sesiones_anteriores = Sesion.query.filter(
         Sesion.mesa_id == mesa_id,
@@ -237,11 +268,35 @@ def ver_mesa(mesa_id):
         db.func.date(Sesion.fecha_inicio) == hoy
     ).order_by(Sesion.fecha_inicio.desc()).all()
     
+    # Calcular totales para cada sesión anterior
+    sesiones_con_totales = []
+    for sesion in sesiones_anteriores:
+        total_sesion = 0
+        total_pagado_sesion = 0
+        total_pendiente_sesion = 0
+        
+        for pedido in sesion.pedidos:
+            subtotal = pedido.cantidad * pedido.precio_unitario
+            total_sesion += subtotal
+            
+            if pedido.pagado:
+                total_pagado_sesion += subtotal
+            else:
+                total_pendiente_sesion += subtotal
+        
+        sesiones_con_totales.append({
+            'sesion': sesion,
+            'total_general': total_sesion,
+            'total_pagado': total_pagado_sesion,
+            'total_pendiente': total_pendiente_sesion
+        })
+    
     return render_template("ver_mesa.html", 
                          mesa=mesa, 
                          pedidos=pedidos_actuales,
                          sesion_activa=sesion_activa,
-                         sesiones_anteriores=sesiones_anteriores,
+                         totales_sesion_activa=totales_sesion_activa,
+                         sesiones_anteriores=sesiones_con_totales,
                          current_user=current_user)
 
 @app.route("/cocina")
@@ -302,6 +357,7 @@ def historial():
     fecha_param = request.args.get('fecha')
     fecha_seleccionada = None
     pedidos_por_dia = {}
+    totales_por_dia = {}
     
     if fecha_param:
         try:
@@ -314,6 +370,17 @@ def historial():
             if pedidos:
                 fecha_str = fecha_seleccionada.strftime('%Y-%m-%d')
                 pedidos_por_dia[fecha_str] = pedidos
+                
+                # Calcular totales para esa fecha
+                total_general = sum(p.cantidad * p.precio_unitario for p in pedidos)
+                total_pagado = sum(p.cantidad * p.precio_unitario for p in pedidos if p.pagado)
+                total_pendiente = sum(p.cantidad * p.precio_unitario for p in pedidos if not p.pagado)
+                
+                totales_por_dia[fecha_str] = {
+                    'total_general': total_general,
+                    'total_pagado': total_pagado,
+                    'total_pendiente': total_pendiente
+                }
         except ValueError:
             flash('Fecha inválida', 'error')
             fecha_seleccionada = None
@@ -330,9 +397,22 @@ def historial():
         
         # Limitar a los últimos 7 días
         pedidos_por_dia = dict(list(pedidos_por_dia.items())[:7])
+        
+        # Calcular totales para cada día
+        for fecha_str, pedidos_dia in pedidos_por_dia.items():
+            total_general = sum(p.cantidad * p.precio_unitario for p in pedidos_dia)
+            total_pagado = sum(p.cantidad * p.precio_unitario for p in pedidos_dia if p.pagado)
+            total_pendiente = sum(p.cantidad * p.precio_unitario for p in pedidos_dia if not p.pagado)
+            
+            totales_por_dia[fecha_str] = {
+                'total_general': total_general,
+                'total_pagado': total_pagado,
+                'total_pendiente': total_pendiente
+            }
     
     return render_template("historial.html", 
                          pedidos_por_dia=pedidos_por_dia,
+                         totales_por_dia=totales_por_dia,
                          fecha_seleccionada=fecha_seleccionada,
                          now=datetime.now())
 

@@ -16,6 +16,7 @@
             background: #f8fafc;
             color: #1e293b;
             line-height: 1.6;
+            padding-bottom: 5rem;
         }
 
         .navbar {
@@ -42,7 +43,7 @@
         }
 
         .container {
-            max-width: 800px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 2rem 1.5rem;
         }
@@ -69,9 +70,146 @@
             color: #1e293b;
         }
 
+        /* Selector de modo */
+        .mode-selector {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            background: white;
+            padding: 1rem;
+            border-radius: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 1rem;
+            border: 2px solid #e2e8f0;
+            background: white;
+            border-radius: 0.75rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: #64748b;
+        }
+
+        .mode-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
+
+        .mode-btn:hover:not(.active) {
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        /* Vista de Menú */
+        .menu-view {
+            display: none;
+        }
+
+        .menu-view.active {
+            display: block;
+        }
+
+        .categorias-menu {
+            display: grid;
+            gap: 2rem;
+        }
+
+        .categoria-section {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .categoria-header {
+            font-size: 1.5rem;
+            color: #667eea;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .items-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .item-card {
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .item-card:hover {
+            border-color: #667eea;
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+
+        .item-card.selected {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
+
+        .item-emoji {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .item-nombre {
+            font-weight: 600;
+            font-size: 0.95rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .item-descripcion {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-bottom: 0.5rem;
+            display: -webkit-box;
+            -webkitline: 2;
+            -clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .item-card.selected .item-descripcion {
+            color: rgba(255,255,255,0.9);
+        }
+
+        .item-precio {
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: #667eea;
+        }
+
+        .item-card.selected .item-precio {
+            color: white;
+        }
+
+        /* Vista de Formulario Manual */
+        .form-view {
+            display: none;
+        }
+
+        .form-view.active {
+            display: block;
+        }
+
         .form-container {
             background: white;
-            padding: 2.5rem;
+            padding: 2rem;
             border-radius: 1rem;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
@@ -109,34 +247,116 @@
             resize: vertical;
         }
 
-        .form-actions {
-            display: flex;
-            gap: 1rem;
+        /* Pedido seleccionado */
+        .selected-item-info {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            margin-bottom: 1.5rem;
+            display: none;
+        }
+
+        .selected-item-info.show {
+            display: block;
+        }
+
+        .selected-item-info h3 {
+            font-size: 1.3rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .selected-item-info p {
+            opacity: 0.9;
+            margin-bottom: 0.25rem;
+        }
+
+        /* Panel de cantidad y notas */
+        .order-details {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             margin-top: 2rem;
+            display: none;
+        }
+
+        .order-details.show {
+            display: block;
+        }
+
+        .quantity-selector {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .quantity-btn {
+            width: 50px;
+            height: 50px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            font-size: 1.5rem;
+            font-weight: bold;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .quantity-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .quantity-display {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .total-preview {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            text-align: center;
+            font-size: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .total-preview strong {
+            display: block;
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            opacity: 0.9;
         }
 
         .btn {
-            flex: 1;
             padding: 1rem 2rem;
             border: none;
             border-radius: 0.5rem;
             font-size: 1rem;
             font-weight: 600;
-            text-decoration: none;
-            text-align: center;
             cursor: pointer;
             transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
         }
 
         .btn-primary {
             background: #667eea;
             color: white;
+            width: 100%;
         }
 
         .btn-primary:hover {
             background: #5568d3;
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         }
 
         .btn-secondary {
@@ -148,50 +368,29 @@
             background: #475569;
         }
 
-        .menu-sugerencias {
-            margin-top: 3rem;
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
         }
 
-        .menu-sugerencias h3 {
-            margin-bottom: 1.5rem;
-            color: #1e293b;
-            font-size: 1.3rem;
-        }
-
-        .sugerencias-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 0.75rem;
-        }
-
-        .sugerencia-btn {
-            padding: 1rem;
-            border: 2px solid #e2e8f0;
-            background: white;
-            border-radius: 0.75rem;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-size: 0.95rem;
-            font-weight: 500;
-        }
-
-        .sugerencia-btn:hover {
-            border-color: #667eea;
-            background: #f1f5f9;
-            transform: translateY(-2px);
+        .empty-menu {
+            text-align: center;
+            padding: 3rem;
+            color: #64748b;
         }
 
         @media (max-width: 768px) {
-            .form-container {
-                padding: 1.5rem;
+            .items-grid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            }
+
+            .mode-selector {
+                flex-direction: column;
             }
 
             .form-actions {
                 flex-direction: column;
-            }
-
-            .sugerencias-grid {
-                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
             }
         }
     </style>
@@ -209,56 +408,237 @@
             <h1>Nuevo Pedido - Mesa {{ mesa.numero }}</h1>
         </div>
 
-        <div class="form-container">
-            <form method="POST" class="pedido-form">
-                <div class="form-group">
-                    <label for="producto">Producto *</label>
-                    <input type="text" id="producto" name="producto" required autofocus 
-                           placeholder="Ej: Hamburguesa con papas">
-                </div>
-                
-                <div class="form-group">
-                    <label for="cantidad">Cantidad *</label>
-                    <input type="number" id="cantidad" name="cantidad" value="1" min="1" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="notas">Notas adicionales</label>
-                    <textarea id="notas" name="notas" rows="3" 
-                              placeholder="Ej: Sin cebolla, término medio, etc."></textarea>
-                </div>
-                
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">✓ Agregar Pedido</button>
-                    <a href="{{ url_for('ver_mesa', mesa_id=mesa.id) }}" class="btn btn-secondary">Cancelar</a>
-                </div>
-            </form>
+        <!-- Selector de Modo -->
+        <div class="mode-selector">
+            <button class="mode-btn active" onclick="switchMode('menu')">
+                📋 Seleccionar del Menú
+            </button>
+            <button class="mode-btn" onclick="switchMode('manual')">
+                ✏️ Escribir Manualmente
+            </button>
         </div>
 
-        <div class="menu-sugerencias">
-            <h3>📋 Productos Populares</h3>
-            <div class="sugerencias-grid">
-                <button type="button" class="sugerencia-btn" onclick="setProducto('Hamburguesa Clásica')">🍔 Hamburguesa</button>
-                <button type="button" class="sugerencia-btn" onclick="setProducto('Pizza Margherita')">🍕 Pizza</button>
-                <button type="button" class="sugerencia-btn" onclick="setProducto('Ensalada César')">🥗 Ensalada</button>
-                <button type="button" class="sugerencia-btn" onclick="setProducto('Pasta Carbonara')">🍝 Pasta</button>
-                <button type="button" class="sugerencia-btn" onclick="setProducto('Tacos al Pastor')">🌮 Tacos</button>
-                <button type="button" class="sugerencia-btn" onclick="setProducto('Alitas BBQ')">🍗 Alitas</button>
-                <button type="button" class="sugerencia-btn" onclick="setProducto('Cerveza')">🍺 Cerveza</button>
-                <button type="button" class="sugerencia-btn" onclick="setProducto('Refresco')">🥤 Refresco</button>
-                <button type="button" class="sugerencia-btn" onclick="setProducto('Agua')">💧 Agua</button>
-                <button type="button" class="sugerencia-btn" onclick="setProducto('Café')">☕ Café</button>
-                <button type="button" class="sugerencia-btn" onclick="setProducto('Postre del día')">🍰 Postre</button>
-                <button type="button" class="sugerencia-btn" onclick="setProducto('Jugo Natural')">🧃 Jugo</button>
+        <form method="POST" id="orderForm">
+            <!-- MODO: Menú Visual -->
+            <div class="menu-view active" id="menuView">
+                {% if items_menu %}
+                    <!-- Info del item seleccionado -->
+                    <div class="selected-item-info" id="selectedInfo">
+                        <h3 id="selectedName"></h3>
+                        <p id="selectedDesc"></p>
+                        <p><strong>Precio:</strong> $<span id="selectedPrice"></span></p>
+                    </div>
+
+                    <!-- Categorías y Items -->
+                    <div class="categorias-menu">
+                        {% set categorias_dict = {} %}
+                        {% for item in items_menu %}
+                            {% if item.categoria.nombre not in categorias_dict %}
+                                {% set _ = categorias_dict.update({item.categoria.nombre: []}) %}
+                            {% endif %}
+                            {% set _ = categorias_dict[item.categoria.nombre].append(item) %}
+                        {% endfor %}
+
+                        {% for categoria_nombre, items in categorias_dict.items() %}
+                        <div class="categoria-section">
+                            <h2 class="categoria-header">{{ categoria_nombre }}</h2>
+                            <div class="items-grid">
+                                {% for item in items %}
+                                <div class="item-card"onclick="selectItem('{{ item.nombre }}', {{ item.precio }}, '{{ item.descripcion|replace("'", "\\'") if item.descripcion else '' }}', this)">
+                                    <div class="item-emoji">🍽️</div>
+                                    <div class="item-nombre">{{ item.nombre }}</div>
+                                    {% if item.descripcion %}
+                                    <div class="item-descripcion">{{ item.descripcion }}</div>
+                                    {% endif %}
+                                    <div class="item-precio">${{ "%.2f"|format(item.precio) }}</div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- Panel de Cantidad y Notas -->
+                    <div class="order-details" id="orderDetails">
+                        <h3 style="margin-bottom: 1rem;">Ajustar Pedido</h3>
+                        
+                        <div class="form-group">
+                            <label>Cantidad</label>
+                            <div class="quantity-selector"> 
+                                <button type="button" class="quantity-btn" onclick="changeQuantity(-1)">-</button>
+                                <span class="quantity-display" id="quantityDisplay">1</span>
+                                <button type="button" class="quantity-btn" onclick="changeQuantity(1)">+</button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="notas">Notas especiales (opcional)</label>
+                            <textarea id="notas" name="notas" rows="3" 
+                                      placeholder="Ej: Sin cebolla, término medio, etc."></textarea>
+                        </div>
+
+                        <div class="total-preview">
+                            <strong>Total del Pedido</strong>
+                            $<span id="totalAmount">0.00</span>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">✓ Agregar a la Mesa</button>
+                    </div>
+                {% else %}
+                <div class="empty-menu">
+                    <h2>📭 No hay platillos en el menú</h2>
+                    <p>El administrador debe agregar productos al menú primero</p>
+                    <br>
+                    <button type="button" class="mode-btn" onclick="switchMode('manual')">
+                        Escribir pedido manualmente
+                    </button>
+                </div>
+                {% endif %}
             </div>
-        </div>
+
+            <!-- MODO: Formulario Manual -->
+            <div class="form-view" id="manualView">
+                <div class="form-container">
+                    <div class="form-group">
+                        <label for="producto_manual">Producto *</label>
+                        <input type="text" id="producto_manual" placeholder="Ej: Hamburguesa con papas">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="cantidad_manual">Cantidad *</label>
+                        <input type="number" id="cantidad_manual" value="1" min="1">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="precio_manual">Precio Unitario *</label>
+                        <input type="number" id="precio_manual" step="0.01" min="0" value="0" placeholder="0.00">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="notas_manual">Notas adicionales</label>
+                        <textarea id="notas_manual" rows="3" 
+                                  placeholder="Ej: Sin cebolla, término medio, etc."></textarea>
+                    </div>
+
+                    <div class="total-preview" id="totalPreviewManual" style="display: none;">
+                        <strong>Total</strong>
+                        $<span id="totalManual">0.00</span>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Agregar Pedido</button>
+                        <a href="{{ url_for('ver_mesa', mesa_id=mesa.id) }}" class="btn btn-secondary">Cancelar</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Campos ocultos para enviar -->
+            <input type="hidden" id="producto" name="producto">
+            <input type="hidden" id="cantidad" name="cantidad" value="1">
+            <input type="hidden" id="precio_unitario" name="precio_unitario" value="0">
+        </form>
     </div>
 
     <script>
-        function setProducto(nombre) {
-            document.getElementById('producto').value = nombre;
-            document.getElementById('producto').focus();
+        let selectedItem = null;
+        let currentQuantity = 1;
+        let currentMode = 'menu';
+
+        function switchMode(mode) {
+            currentMode = mode;
+            
+            // Actualizar botones
+            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Actualizar vistas
+            document.getElementById('menuView').classList.toggle('active', mode === 'menu');
+            document.getElementById('manualView').classList.toggle('active', mode === 'manual');
         }
+
+        function selectItem(nombre, precio, descripcion, element) {
+            // Remover selección anterior
+            document.querySelectorAll('.item-card').forEach(card => card.classList.remove('selected'));
+            element.classList.add('selected');
+
+            // Guardar item seleccionado
+            selectedItem = { nombre, precio, descripcion };
+            currentQuantity = 1;
+
+            // Mostrar info
+            document.getElementById('selectedName').textContent = nombre;
+            document.getElementById('selectedDesc').textContent = descripcion || '';
+            document.getElementById('selectedPrice').textContent = precio.toFixed(2);
+            document.getElementById('selectedInfo').classList.add('show');
+
+            // Mostrar panel de detalles
+            document.getElementById('orderDetails').classList.add('show');
+            document.getElementById('quantityDisplay').textContent = '1';
+
+            // Calcular total
+            updateTotal();
+
+            // Scroll al panel de detalles
+            document.getElementById('orderDetails').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function changeQuantity(delta) {
+            currentQuantity = Math.max(1, currentQuantity + delta);
+            document.getElementById('quantityDisplay').textContent = currentQuantity;
+            updateTotal();
+        }
+
+        function updateTotal() {
+            if (selectedItem) {
+                const total = selectedItem.precio * currentQuantity;
+                document.getElementById('totalAmount').textContent = total.toFixed(2);
+            }
+        }
+
+        // Calcular total en modo manual
+        document.getElementById('cantidad_manual')?.addEventListener('input', calcularTotalManual);
+        document.getElementById('precio_manual')?.addEventListener('input', calcularTotalManual);
+
+        function calcularTotalManual() {
+            const cantidad = parseInt(document.getElementById('cantidad_manual').value) || 0;
+            const precio = parseFloat(document.getElementById('precio_manual').value) || 0;
+            const total = cantidad * precio;
+            
+            document.getElementById('totalManual').textContent = total.toFixed(2);
+            document.getElementById('totalPreviewManual').style.display = total > 0 ? 'block' : 'none';
+        }
+
+        // Enviar formulario
+        document.getElementById('orderForm').addEventListener('submit', function(e) {
+            if (currentMode === 'menu') {
+                // Modo menú
+                if (!selectedItem) {
+                    e.preventDefault();
+                    alert('Por favor selecciona un producto del menú');
+                    return;
+                }
+                
+                document.getElementById('producto').value = selectedItem.nombre;
+                document.getElementById('cantidad').value = currentQuantity;
+                document.getElementById('precio_unitario').value = selectedItem.precio;
+            } else {
+                // Modo manual
+                const productoManual = document.getElementById('producto_manual').value;
+                const cantidadManual = document.getElementById('cantidad_manual').value;
+                const precioManual = document.getElementById('precio_manual').value;
+                
+                if (!productoManual || !cantidadManual || !precioManual) {
+                    e.preventDefault();
+                    alert('Por favor completa todos los campos obligatorios');
+                    return;
+                }
+                
+                document.getElementById('producto').value = productoManual;
+                document.getElementById('cantidad').value = cantidadManual;
+                document.getElementById('precio_unitario').value = precioManual;
+                document.getElementById('notas').value = document.getElementById('notas_manual').value;
+            }
+        });
     </script>
 </body>
 </html>

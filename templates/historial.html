@@ -128,7 +128,7 @@
 
         /* Container */
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             padding: 2rem 1.5rem;
         }
@@ -212,7 +212,7 @@
 
         /* Historial Container */
         .historial-container {
-            max-width: 1100px;
+            max-width: 1300px;
             margin: 0 auto;
         }
 
@@ -247,7 +247,7 @@
         /* Stats */
         .historial-stats {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 1rem;
             margin-bottom: 2rem;
         }
@@ -261,9 +261,17 @@
             box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
         }
 
+        .stat-card.green {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+
+        .stat-card.orange {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        }
+
         .stat-value {
             display: block;
-            font-size: 2.5rem;
+            font-size: 2rem;
             font-weight: bold;
             margin-bottom: 0.25rem;
         }
@@ -279,6 +287,7 @@
             overflow-x: auto;
             border-radius: 0.75rem;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
         }
 
         .historial-table {
@@ -296,14 +305,32 @@
             padding: 1rem;
             text-align: left;
             font-weight: 600;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+        }
+
+        .historial-table th.text-right {
+            text-align: right;
+        }
+
+        .historial-table th.text-center {
+            text-align: center;
         }
 
         .historial-table td {
             padding: 1rem;
             border-bottom: 1px solid #f1f5f9;
+        }
+
+        .historial-table td.text-right {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+        }
+
+        .historial-table td.text-center {
+            text-align: center;
         }
 
         .historial-table tbody tr {
@@ -322,6 +349,11 @@
         .text-muted {
             color: #94a3b8;
             font-size: 0.85rem;
+        }
+
+        .precio-total {
+            color: #667eea;
+            font-weight: 700;
         }
 
         /* Badge */
@@ -399,6 +431,59 @@
             font-size: 0.8rem;
         }
 
+        /* Totales del día */
+        .totales-dia {
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            border-left: 4px solid #667eea;
+        }
+
+        .totales-dia h3 {
+            color: #1e293b;
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+        }
+
+        .totales-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .total-item {
+            background: white;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .total-label {
+            font-weight: 600;
+            color: #64748b;
+        }
+
+        .total-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+
+        .total-item.general .total-value {
+            color: #667eea;
+        }
+
+        .total-item.pagado .total-value {
+            color: #10b981;
+        }
+
+        .total-item.pendiente .total-value {
+            color: #f59e0b;
+        }
+
         /* Empty State */
         .empty-state {
             text-align: center;
@@ -437,16 +522,16 @@
             }
 
             .historial-table {
-                font-size: 0.85rem;
+                font-size: 0.8rem;
             }
 
             .historial-table th,
             .historial-table td {
-                padding: 0.75rem 0.5rem;
+                padding: 0.5rem 0.35rem;
             }
 
             .stat-value {
-                font-size: 2rem;
+                font-size: 1.5rem;
             }
 
             /* Make table scrollable on mobile */
@@ -459,11 +544,24 @@
             .historial-table td:first-child {
                 padding-left: 1rem;
             }
+
+            .totales-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         @media (max-width: 480px) {
             .historial-stats {
                 grid-template-columns: 1fr;
+            }
+
+            .fecha-controls {
+                flex-direction: column;
+            }
+
+            .fecha-controls input[type="date"],
+            .fecha-controls button {
+                width: 100%;
             }
         }
     </style>
@@ -502,7 +600,7 @@
         <!-- Page Header -->
         <div class="page-header">
             <h1>📋 Historial de Pedidos</h1>
-            <p class="subtitle">Consulta pedidos por fecha</p>
+            <p class="subtitle">Consulta pedidos y ventas por fecha</p>
         </div>
 
         <!-- Navegación de fechas -->
@@ -538,13 +636,17 @@
                         <span class="stat-value">{{ pedidos|length }}</span>
                         <span class="stat-label">Total Pedidos</span>
                     </div>
-                    <div class="stat-card">
+                    <div class="stat-card green">
                         <span class="stat-value">{{ pedidos|selectattr('pagado', 'equalto', True)|list|length }}</span>
                         <span class="stat-label">Pagados</span>
                     </div>
-                    <div class="stat-card">
+                    <div class="stat-card orange">
                         <span class="stat-value">{{ pedidos|selectattr('pagado', 'equalto', False)|list|length }}</span>
                         <span class="stat-label">Pendientes</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value">${{ "%.2f"|format(totales_por_dia[fecha].total_general) }}</span>
+                        <span class="stat-label">Ventas Totales</span>
                     </div>
                 </div>
                 
@@ -555,9 +657,12 @@
                                 <th>Hora</th>
                                 <th>Mesa</th>
                                 <th>Pedido</th>
+                                <th class="text-center">Cant.</th>
+                                <th class="text-right">Precio Unit.</th>
+                                <th class="text-right">Subtotal</th>
                                 <th>Mesero</th>
-                                <th>Estado</th>
-                                <th>Pago</th>
+                                <th class="text-center">Estado</th>
+                                <th class="text-center">Pago</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -566,14 +671,19 @@
                                 <td><strong>{{ pedido.fecha.strftime('%H:%M') }}</strong></td>
                                 <td class="mesa-cell">Mesa {{ pedido.mesa.numero }}</td>
                                 <td>
-                                    <strong>{{ pedido.cantidad }}x {{ pedido.producto }}</strong>
+                                    <strong>{{ pedido.producto }}</strong>
                                     {% if pedido.notas %}
                                     <br><small class="text-muted">📝 {{ pedido.notas }}</small>
                                     {% endif %}
                                 </td>
+                                <td class="text-center">{{ pedido.cantidad }}</td>
+                                <td class="text-right">${{ "%.2f"|format(pedido.precio_unitario) }}</td>
+                                <td class="text-right precio-total">${{ "%.2f"|format(pedido.cantidad * pedido.precio_unitario) }}</td>
                                 <td>{{ pedido.mesero.nombre }}</td>
-                                <td><span class="estado-badge estado-{{ pedido.estado }}">{{ pedido.estado }}</span></td>
-                                <td>
+                                <td class="text-center">
+                                    <span class="estado-badge estado-{{ pedido.estado }}">{{ pedido.estado }}</span>
+                                </td>
+                                <td class="text-center">
                                     {% if pedido.pagado %}
                                     <span class="badge badge-success">Pagado ✓</span>
                                     {% else %}
@@ -586,6 +696,25 @@
                             {% endfor %}
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Totales del día -->
+                <div class="totales-dia">
+                    <h3>💰 Resumen Financiero del Día</h3>
+                    <div class="totales-grid">
+                        <div class="total-item general">
+                            <span class="total-label">Total General:</span>
+                            <span class="total-value">${{ "%.2f"|format(totales_por_dia[fecha].total_general) }}</span>
+                        </div>
+                        <div class="total-item pagado">
+                            <span class="total-label">Total Pagado:</span>
+                            <span class="total-value">${{ "%.2f"|format(totales_por_dia[fecha].total_pagado) }}</span>
+                        </div>
+                        <div class="total-item pendiente">
+                            <span class="total-label">Total Pendiente:</span>
+                            <span class="total-value">${{ "%.2f"|format(totales_por_dia[fecha].total_pendiente) }}</span>
+                        </div>
+                    </div>
                 </div>
             </div>
             {% endfor %}
