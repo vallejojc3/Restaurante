@@ -567,30 +567,34 @@ def historial():
     # Obtener fecha del parámetro o usar fecha actual
     fecha_param = request.args.get('fecha')
     fecha_seleccionada = None
-    pedidos_por_dia = {}
+    sesiones_por_dia = {}
     totales_por_dia = {}
     
     if fecha_param:
         try:
             fecha_seleccionada = datetime.strptime(fecha_param, '%Y-%m-%d').date()
-            # Obtener pedidos de la fecha seleccionada
-            pedidos = Pedido.query.filter(
-                db.func.date(Pedido.fecha) == fecha_seleccionada
-            ).order_by(Pedido.fecha.desc()).all()
+            # Obtener sesiones de la fecha seleccionada
+            sesiones = Sesion.query.filter(
+                db.func.date(Sesion.fecha_inicio) == fecha_seleccionada
+            ).order_by(Sesion.fecha_inicio.desc()).all()
             
-            if pedidos:
+            if sesiones:
                 fecha_str = fecha_seleccionada.strftime('%Y-%m-%d')
-                pedidos_por_dia[fecha_str] = pedidos
+                sesiones_por_dia[fecha_str] = sesiones
                 
                 # Calcular totales para esa fecha
-                total_general = sum(p.cantidad * p.precio_unitario for p in pedidos)
-                total_pagado = sum(p.cantidad * p.precio_unitario for p in pedidos if p.pagado)
-                total_pendiente = sum(p.cantidad * p.precio_unitario for p in pedidos if not p.pagado)
+                total_general = sum(s.total or 0 for s in sesiones if not s.activa)
+                total_facturado = sum(s.total or 0 for s in sesiones if not s.activa and s.facturas)
+                total_sin_facturar = sum(s.total or 0 for s in sesiones if not s.activa and not s.facturas)
+                sesiones_activas = sum(1 for s in sesiones if s.activa)
+                sesiones_cerradas = sum(1 for s in sesiones if not s.activa)
                 
                 totales_por_dia[fecha_str] = {
                     'total_general': total_general,
-                    'total_pagado': total_pagado,
-                    'total_pendiente': total_pendiente
+                    'total_facturado': total_facturado,
+                    'total_sin_facturar': total_sin_facturar,
+                    'sesiones_activas': sesiones_activas,
+                    'sesiones_cerradas': sesiones_cerradas
                 }
         except ValueError:
             flash('Fecha inválida', 'error')
@@ -598,31 +602,35 @@ def historial():
     
     # Si no hay fecha seleccionada, mostrar últimos 7 días
     if not fecha_param:
-        pedidos = Pedido.query.order_by(Pedido.fecha.desc()).limit(500).all()
+        sesiones = Sesion.query.order_by(Sesion.fecha_inicio.desc()).limit(100).all()
         
-        for pedido in pedidos:
-            fecha_str = pedido.fecha.strftime('%Y-%m-%d')
-            if fecha_str not in pedidos_por_dia:
-                pedidos_por_dia[fecha_str] = []
-            pedidos_por_dia[fecha_str].append(pedido)
+        for sesion in sesiones:
+            fecha_str = sesion.fecha_inicio.strftime('%Y-%m-%d')
+            if fecha_str not in sesiones_por_dia:
+                sesiones_por_dia[fecha_str] = []
+            sesiones_por_dia[fecha_str].append(sesion)
         
         # Limitar a los últimos 7 días
-        pedidos_por_dia = dict(list(pedidos_por_dia.items())[:7])
+        sesiones_por_dia = dict(list(sesiones_por_dia.items())[:7])
         
         # Calcular totales para cada día
-        for fecha_str, pedidos_dia in pedidos_por_dia.items():
-            total_general = sum(p.cantidad * p.precio_unitario for p in pedidos_dia)
-            total_pagado = sum(p.cantidad * p.precio_unitario for p in pedidos_dia if p.pagado)
-            total_pendiente = sum(p.cantidad * p.precio_unitario for p in pedidos_dia if not p.pagado)
+        for fecha_str, sesiones_dia in sesiones_por_dia.items():
+            total_general = sum(s.total or 0 for s in sesiones_dia if not s.activa)
+            total_facturado = sum(s.total or 0 for s in sesiones_dia if not s.activa and s.facturas)
+            total_sin_facturar = sum(s.total or 0 for s in sesiones_dia if not s.activa and not s.facturas)
+            sesiones_activas = sum(1 for s in sesiones_dia if s.activa)
+            sesiones_cerradas = sum(1 for s in sesiones_dia if not s.activa)
             
             totales_por_dia[fecha_str] = {
                 'total_general': total_general,
-                'total_pagado': total_pagado,
-                'total_pendiente': total_pendiente
+                'total_facturado': total_facturado,
+                'total_sin_facturar': total_sin_facturar,
+                'sesiones_activas': sesiones_activas,
+                'sesiones_cerradas': sesiones_cerradas
             }
     
     return render_template("historial.html", 
-                         pedidos_por_dia=pedidos_por_dia,
+                         sesiones_por_dia=sesiones_por_dia,
                          totales_por_dia=totales_por_dia,
                          fecha_seleccionada=fecha_seleccionada,
                          now=datetime.now())
