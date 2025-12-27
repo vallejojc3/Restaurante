@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Factura {{ factura.numero_consecutivo }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Courier New', monospace; background: #f5f5f5; padding: 20px; }
+        
+        .no-print { margin-bottom: 20px; text-align: center; }
+        .btn { padding: 12px 30px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; text-decoration: none; display: inline-block; margin: 0 5px; transition: all 0.3s; }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-success { background: #27ae60; color: white; }
+        .btn-success:hover { background: #229954; }
+        .btn-secondary { background: #95a5a6; color: white; }
+        .btn-secondary:hover { background: #7f8c8d; }
+        
+        .factura { max-width: 80mm; margin: 0 auto; background: white; padding: 10mm; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        
+        .header { text-align: center; margin-bottom: 5mm; border-bottom: 2px dashed #000; padding-bottom: 5mm; }
+        .header h1 { font-size: 18px; margin-bottom: 3mm; }
+        .header p { font-size: 11px; margin: 1mm 0; }
+        
+        .factura-info { margin: 5mm 0; font-size: 12px; }
+        .factura-info .row { display: flex; justify-content: space-between; margin: 2mm 0; }
+        .factura-info strong { font-weight: bold; }
+        
+        .separator { border-top: 1px dashed #000; margin: 5mm 0; }
+        
+        .items { margin: 5mm 0; }
+        .item { margin: 3mm 0; font-size: 11px; }
+        .item-header { display: flex; justify-content: space-between; font-weight: bold; }
+        .item-detail { display: flex; justify-content: space-between; margin-top: 1mm; }
+        
+        .totales { margin-top: 5mm; border-top: 2px solid #000; padding-top: 3mm; font-size: 12px; }
+        .total-row { display: flex; justify-content: space-between; margin: 2mm 0; }
+        .total-row.grand { font-size: 16px; font-weight: bold; margin-top: 3mm; border-top: 2px solid #000; padding-top: 3mm; }
+        
+        .footer { margin-top: 8mm; text-align: center; font-size: 10px; border-top: 2px dashed #000; padding-top: 5mm; }
+        .footer p { margin: 2mm 0; }
+        
+        .qr-placeholder { width: 100px; height: 100px; border: 2px dashed #ccc; margin: 5mm auto; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #999; }
+        
+        @media print {
+            body { background: white; padding: 0; }
+            .no-print { display: none; }
+            .factura { box-shadow: none; max-width: 80mm; margin: 0; }
+            @page { size: 80mm auto; margin: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print">
+        <button onclick="window.print()" class="btn btn-primary">🖨️ Imprimir</button>
+        <a href="{{ url_for('lista_facturas') }}" class="btn btn-secondary">📋 Ver Todas</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-success">🏠 Volver al Dashboard</a>
+    </div>
+    
+    <div class="factura">
+        <!-- ENCABEZADO -->
+        <div class="header">
+            <h1>{{ config.nombre }}</h1>
+            <p><strong>NIT:</strong> {{ config.nit }}</p>
+            <p>{{ config.direccion }}</p>
+            <p>{{ config.ciudad }}</p>
+            <p><strong>Tel:</strong> {{ config.telefono }}</p>
+            {% if config.email %}
+            <p>{{ config.email }}</p>
+            {% endif %}
+            <p style="margin-top: 3mm;"><strong>{{ config.regimen }}</strong></p>
+            {% if config.resolucion_dian %}
+            <p style="font-size: 9px; margin-top: 2mm;">{{ config.resolucion_dian }}</p>
+            {% endif %}
+        </div>
+        
+        <!-- INFORMACIÓN DE FACTURA -->
+        <div class="factura-info">
+            <div class="row">
+                <span><strong>FACTURA:</strong></span>
+                <span>{{ factura.numero_consecutivo }}</span>
+            </div>
+            <div class="row">
+                <span><strong>FECHA:</strong></span>
+                <span>{{ factura.fecha_emision.strftime('%d/%m/%Y') }}</span>
+            </div>
+            <div class="row">
+                <span><strong>HORA:</strong></span>
+                <span>{{ factura.fecha_emision.strftime('%H:%M:%S') }}</span>
+            </div>
+            <div class="row">
+                <span><strong>MESA:</strong></span>
+                <span>{{ factura.sesion.mesa.numero }}</span>
+            </div>
+            {% if factura.cliente_nombre %}
+            <div class="separator"></div>
+            <div class="row">
+                <span><strong>CLIENTE:</strong></span>
+                <span>{{ factura.cliente_nombre }}</span>
+            </div>
+            {% if factura.cliente_documento %}
+            <div class="row">
+                <span><strong>DOC:</strong></span>
+                <span>{{ factura.cliente_documento }}</span>
+            </div>
+            {% endif %}
+            {% endif %}
+        </div>
+        
+        <div class="separator"></div>
+        
+        <!-- ITEMS -->
+        <div class="items">
+            <div class="item-header">
+                <span>PRODUCTO</span>
+                <span>TOTAL</span>
+            </div>
+            <div class="separator"></div>
+            
+            {% for pedido in factura.sesion.pedidos %}
+            <div class="item">
+                <div class="item-header">
+                    <span>{{ pedido.producto }}</span>
+                    <span>${{ '{:,.0f}'.format(pedido.cantidad * pedido.precio_unitario) }}</span>
+                </div>
+                <div class="item-detail">
+                    <span>{{ pedido.cantidad }} x ${{ '{:,.0f}'.format(pedido.precio_unitario) }}</span>
+                    <span></span>
+                </div>
+                {% if pedido.notas %}
+                <div style="font-size: 10px; color: #666; margin-top: 1mm;">
+                    Nota: {{ pedido.notas }}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- TOTALES -->
+        <div class="totales">
+            <div class="total-row">
+                <span>SUBTOTAL:</span>
+                <span>${{ '{:,.0f}'.format(factura.subtotal) }}</span>
+            </div>
+            <div class="total-row">
+                <span>IVA ({{ config.iva_porcentaje }}%):</span>
+                <span>${{ '{:,.0f}'.format(factura.iva) }}</span>
+            </div>
+            {% if factura.propina > 0 %}
+            <div class="total-row">
+                <span>PROPINA:</span>
+                <span>${{ '{:,.0f}'.format(factura.propina) }}</span>
+            </div>
+            {% endif %}
+            <div class="total-row grand">
+                <span>TOTAL:</span>
+                <span>${{ '{:,.0f}'.format(factura.total) }}</span>
+            </div>
+        </div>
+        
+        <div class="separator"></div>
+        
+        <!-- MÉTODO DE PAGO -->
+        <div class="factura-info">
+            <div class="row">
+                <span><strong>PAGO:</strong></span>
+                <span style="text-transform: uppercase;">
+                    {% if factura.metodo_pago == 'efectivo' %}💵 Efectivo
+                    {% elif factura.metodo_pago == 'tarjeta' %}💳 Tarjeta
+                    {% elif factura.metodo_pago == 'transferencia' %}📱 Transferencia
+                    {% elif factura.metodo_pago == 'mixto' %}🔀 Mixto
+                    {% endif %}
+                </span>
+            </div>
+            
+            {% if desglose %}
+            <div class="separator"></div>
+            <p style="font-size: 10px; margin-bottom: 2mm;"><strong>Desglose:</strong></p>
+            {% if desglose.efectivo > 0 %}
+            <div class="row" style="font-size: 10px;">
+                <span>Efectivo:</span>
+                <span>${{ '{:,.0f}'.format(desglose.efectivo) }}</span>
+            </div>
+            {% endif %}
+            {% if desglose.tarjeta > 0 %}
+            <div class="row" style="font-size: 10px;">
+                <span>Tarjeta:</span>
+                <span>${{ '{:,.0f}'.format(desglose.tarjeta) }}</span>
+            </div>
+            {% endif %}
+            {% if desglose.transferencia > 0 %}
+            <div class="row" style="font-size: 10px;">
+                <span>Transferencia:</span>
+                <span>${{ '{:,.0f}'.format(desglose.transferencia) }}</span>
+            </div>
+            {% endif %}
+            {% endif %}
+        </div>
+        
+        {% if factura.notas %}
+        <div class="separator"></div>
+        <div style="font-size: 10px; margin: 3mm 0;">
+            <strong>NOTAS:</strong><br>
+            {{ factura.notas }}
+        </div>
+        {% endif %}
+        
+        <!-- FOOTER -->
+        <div class="footer">
+            <p><strong>¡Gracias por su visita!</strong></p>
+            <p>Vuelva pronto</p>
+            <p style="margin-top: 3mm; font-size: 9px;">
+                Factura generada el {{ factura.fecha_emision.strftime('%d/%m/%Y %H:%M') }}
+            </p>
+            <p style="font-size: 9px;">
+                Sistema de Facturación - {{ config.nombre }}
+            </p>
+        </div>
+    </div>
+</body>
+</html>

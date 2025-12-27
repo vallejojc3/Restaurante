@@ -726,6 +726,46 @@
             </div>
             {% endif %}
         </div>
+        <!-- Agregar este código en tu template ver_mesa.html existente -->
+        <!-- Dentro de la sección de sesión activa, después del total -->
+
+        {% if sesion_activa and pedidos %}
+        <div style="margin-top: 20px; padding: 20px; background: #e8f5e9; border-radius: 8px; border: 2px solid #27ae60;">
+            <h3 style="color: #27ae60; margin-bottom: 15px;">💳 Cerrar y Facturar</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                <div>
+                    <p style="font-size: 18px; font-weight: bold; color: #2c3e50;">
+                        Total a facturar: ${{ '{:,.0f}'.format(totales_sesion_activa['total_general']) }}
+                    </p>
+                    <p style="font-size: 14px; color: #7f8c8d; margin-top: 5px;">
+                        {{ pedidos|length }} productos
+                    </p>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <a href="{{ url_for('facturar_sesion', sesion_id=sesion_activa.id) }}" 
+                    class="btn btn-success" 
+                    style="padding: 12px 30px; background: #27ae60; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                        ✅ Facturar Sesión
+                    </a>
+                </div>
+            </div>
+            <p style="margin-top: 10px; font-size: 12px; color: #7f8c8d;">
+                Al facturar, se cerrará la sesión y se liberará la mesa
+            </p>
+        </div>
+        {% endif %}
+
+        <!-- También puedes agregar un enlace en el menú de navegación -->
+        <div style="margin-top: 20px;">
+            <a href="{{ url_for('lista_facturas') }}" class="btn" style="padding: 10px 20px; background: #3498db; color: white; text-decoration: none; border-radius: 5px;">
+                📄 Ver Facturas
+            </a>
+            {% if current_user.rol == 'admin' %}
+            <a href="{{ url_for('configuracion_restaurante') }}" class="btn" style="padding: 10px 20px; background: #95a5a6; color: white; text-decoration: none; border-radius: 5px; margin-left: 10px;">
+                ⚙️ Configuración
+            </a>
+            {% endif %}
+        </div>
 
         <!-- Modal para cuenta detallada de sesión activa -->
         <div id="modal_sesion_activa" class="modal">

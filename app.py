@@ -4,6 +4,9 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import os
+from flask import jsonify, make_response
+import json
+from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'clave-desarrollo-temporal-cambiar-en-produccion')
@@ -98,10 +101,218 @@ class ItemMenu(db.Model):
 def load_user(user_id):
     return Usuario.query.get(int(user_id))
 
+# Modelo para Factura (agregar con los otros modelos)
+class Factura(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    numero_consecutivo = db.Column(db.String(50), unique=True, nullable=False)
+    sesion_id = db.Column(db.Integer, db.ForeignKey('sesion.id'), nullable=False)
+    fecha_emision = db.Column(db.DateTime, default=datetime.now)
+    subtotal = db.Column(db.Float, default=0)
+    iva = db.Column(db.Float, default=0)
+    propina = db.Column(db.Float, default=0)
+    total = db.Column(db.Float, default=0)
+    metodo_pago = db.Column(db.String(50), default='efectivo')  # efectivo, tarjeta, transferencia, mixto
+    desglose_pago = db.Column(db.Text)  # JSON con desglose si es mixto
+    cliente_nombre = db.Column(db.String(200))
+    cliente_documento = db.Column(db.String(50))
+    notas = db.Column(db.Text)
+    
+    sesion = db.relationship('Sesion', backref='facturas')
+
+# Modelo para configuración del restaurante (agregar con los otros modelos)
+class ConfiguracionRestaurante(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(200), default='Mi Restaurante')
+    nit = db.Column(db.String(50), default='900.000.000-0')
+    direccion = db.Column(db.String(300), default='Calle 123 #45-67')
+    ciudad = db.Column(db.String(100), default='Zarzal, Valle del Cauca')
+    telefono = db.Column(db.String(50), default='(+57) 300 000 0000')
+    email = db.Column(db.String(100))
+    regimen = db.Column(db.String(100), default='Régimen Simplificado')
+    resolucion_dian = db.Column(db.String(200))
+    rango_facturacion = db.Column(db.String(100))
+    iva_porcentaje = db.Column(db.Float, default=19.0)
+    logo_url = db.Column(db.String(500))
+
+
 # =========================
 # RUTAS
 # =========================
+@app.route("/facturar_sesion/<int:sesion_id>", methods=["GET", "POST"])
+@login_required
+def facturar_sesion(sesion_id):
+    """Generar factura para una sesión"""
+    sesion = Sesion.query.get_or_404(sesion_id)
+    config = ConfiguracionRestaurante.query.first()
+    
+    if not config:
+        config = ConfiguracionRestaurante()
+        db.session.add(config)
+        db.session.commit()
+    
+    if request.method == "POST":
+        # Obtener datos del formulario
+        metodo_pago = request.form.get("metodo_pago", "efectivo")
+        propina = request.form.get("propina", 0, type=float)
+        cliente_nombre = request.form.get("cliente_nombre", "")
+        cliente_documento = request.form.get("cliente_documento", "")
+        notas = request.form.get("notas", "")
+        
+        # Desglose de pago para método mixto
+        desglose_pago = None
+        if metodo_pago == "mixto":
+            desglose_pago = {
+                "efectivo": request.form.get("efectivo", 0, type=float),
+                "tarjeta": request.form.get("tarjeta", 0, type=float),
+                "transferencia": request.form.get("transferencia", 0, type=float)
+            }
+        
+        # Calcular totales
+        subtotal = sum(p.cantidad * p.precio_unitario for p in sesion.pedidos)
+        iva = 0  # Sin IVA
+        total = subtotal + propina
+        
+        # Generar número consecutivo
+        ultima_factura = Factura.query.order_by(Factura.id.desc()).first()
+        if ultima_factura:
+            ultimo_num = int(ultima_factura.numero_consecutivo.split('-')[1])
+            nuevo_num = ultimo_num + 1
+        else:
+            nuevo_num = 1
+        
+        numero_consecutivo = f"FACT-{nuevo_num:06d}"
+        
+        # Crear factura
+        factura = Factura(
+            numero_consecutivo=numero_consecutivo,
+            sesion_id=sesion_id,
+            subtotal=subtotal,
+            iva=iva,
+            propina=propina,
+            total=total,
+            metodo_pago=metodo_pago,
+            desglose_pago=json.dumps(desglose_pago) if desglose_pago else None,
+            cliente_nombre=cliente_nombre,
+            cliente_documento=cliente_documento,
+            notas=notas
+        )
+        
+        # Actualizar sesión
+        sesion.total = total
+        sesion.activa = False
+        sesion.fecha_fin = datetime.now()
+        
+        # Marcar todos los pedidos como pagados
+        for pedido in sesion.pedidos:
+            pedido.pagado = True
+            pedido.estado = 'entregado'
+        
+        db.session.add(factura)
+        db.session.commit()
+        
+        flash(f'Factura {numero_consecutivo} generada exitosamente', 'success')
+        return redirect(url_for('ver_factura', factura_id=factura.id))
+    
+    # Calcular totales para mostrar en el formulario
+    subtotal = sum(p.cantidad * p.precio_unitario for p in sesion.pedidos)
+    iva = 0  # Sin IVA
+    
+    return render_template("facturar_sesion.html", 
+                         sesion=sesion, 
+                         config=config,
+                         subtotal=subtotal,
+                         iva=iva,
+                         datetime=datetime)
 
+@app.route("/factura/<int:factura_id>")
+@login_required
+def ver_factura(factura_id):
+    """Ver una factura generada"""
+    factura = Factura.query.get_or_404(factura_id)
+    config = ConfiguracionRestaurante.query.first()
+    
+    # Parsear desglose de pago si existe
+    desglose = None
+    if factura.desglose_pago:
+        desglose = json.loads(factura.desglose_pago)
+    
+    return render_template("ver_factura.html", 
+                         factura=factura, 
+                         config=config,
+                         desglose=desglose)
+
+@app.route("/facturas")
+@login_required
+def lista_facturas():
+    """Listar todas las facturas"""
+    fecha_param = request.args.get('fecha')
+    
+    if fecha_param:
+        try:
+            fecha_obj = datetime.strptime(fecha_param, '%Y-%m-%d').date()
+            facturas = Factura.query.filter(
+                db.func.date(Factura.fecha_emision) == fecha_obj
+            ).order_by(Factura.fecha_emision.desc()).all()
+        except ValueError:
+            flash('Fecha inválida', 'error')
+            facturas = Factura.query.order_by(Factura.fecha_emision.desc()).limit(50).all()
+    else:
+        # Últimas 50 facturas
+        facturas = Factura.query.order_by(Factura.fecha_emision.desc()).limit(50).all()
+    
+    return render_template("lista_facturas.html", facturas=facturas)
+
+@app.route("/configuracion_restaurante", methods=["GET", "POST"])
+@login_required
+def configuracion_restaurante():
+    """Configurar datos del restaurante"""
+    if current_user.rol != 'admin':
+        flash('Solo los administradores pueden modificar la configuración', 'error')
+        return redirect(url_for('dashboard'))
+    
+    config = ConfiguracionRestaurante.query.first()
+    
+    if not config:
+        config = ConfiguracionRestaurante()
+        db.session.add(config)
+        db.session.commit()
+    
+    if request.method == "POST":
+        config.nombre = request.form.get("nombre")
+        config.nit = request.form.get("nit")
+        config.direccion = request.form.get("direccion")
+        config.ciudad = request.form.get("ciudad")
+        config.telefono = request.form.get("telefono")
+        config.email = request.form.get("email", "")
+        config.regimen = request.form.get("regimen")
+        config.resolucion_dian = request.form.get("resolucion_dian", "")
+        config.rango_facturacion = request.form.get("rango_facturacion", "")
+        config.iva_porcentaje = request.form.get("iva_porcentaje", 19.0, type=float)
+        config.logo_url = request.form.get("logo_url", "")
+        
+        db.session.commit()
+        flash('Configuración actualizada exitosamente', 'success')
+        return redirect(url_for('configuracion_restaurante'))
+    
+    return render_template("configuracion_restaurante.html", config=config, now=datetime.now())
+
+# Actualizar la función init_db() para incluir la configuración inicial
+def init_db_facturacion():
+    """Agregar esto dentro de tu función init_db() existente"""
+    # Crear configuración del restaurante si no existe
+    if ConfiguracionRestaurante.query.count() == 0:
+        config = ConfiguracionRestaurante(
+            nombre='Mi Restaurante',
+            nit='900.000.000-0',
+            direccion='Calle 123 #45-67',
+            ciudad='Zarzal, Valle del Cauca',
+            telefono='(+57) 300 000 0000',
+            regimen='Régimen Simplificado'
+        )
+        db.session.add(config)
+        db.session.commit()
+
+        
 @app.route("/", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:

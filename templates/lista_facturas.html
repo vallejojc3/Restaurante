@@ -1,0 +1,112 @@
+<!-- templates/lista_facturas.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facturas</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        
+        .header { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+        .header h1 { color: #2c3e50; }
+        
+        .filtros { display: flex; gap: 10px; align-items: center; }
+        .filtros input { padding: 10px; border: 2px solid #ecf0f1; border-radius: 5px; }
+        .filtros button { padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .filtros button:hover { background: #2980b9; }
+        
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .stat-card .value { font-size: 28px; font-weight: bold; color: #27ae60; margin-top: 5px; }
+        .stat-card .label { color: #7f8c8d; font-size: 14px; }
+        
+        .facturas-grid { display: grid; gap: 15px; }
+        .factura-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; transition: transform 0.3s; }
+        .factura-card:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.15); }
+        
+        .factura-info h3 { color: #2c3e50; margin-bottom: 8px; }
+        .factura-info p { color: #7f8c8d; font-size: 14px; margin: 3px 0; }
+        .factura-total { font-size: 24px; font-weight: bold; color: #27ae60; }
+        .factura-metodo { display: inline-block; padding: 5px 10px; background: #ecf0f1; border-radius: 5px; font-size: 12px; margin-top: 5px; }
+        
+        .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; margin-right: 5px; transition: all 0.3s; }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-secondary { background: #95a5a6; color: white; }
+        .btn-secondary:hover { background: #7f8c8d; }
+        
+        .empty-state { text-align: center; padding: 60px 20px; background: white; border-radius: 10px; }
+        .empty-state h2 { color: #95a5a6; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📄 Facturas</h1>
+            <div class="filtros">
+                <form method="GET" style="display: flex; gap: 10px;">
+                    <input type="date" name="fecha" value="{{ request.args.get('fecha', '') }}">
+                    <button type="submit">🔍 Buscar</button>
+                    {% if request.args.get('fecha') %}
+                    <a href="{{ url_for('lista_facturas') }}" class="btn btn-secondary">✖️ Limpiar</a>
+                    {% endif %}
+                </form>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">🏠 Dashboard</a>
+            </div>
+        </div>
+        
+        {% if facturas %}
+        <div class="stats">
+            <div class="stat-card">
+                <div class="label">Total Facturas</div>
+                <div class="value">{{ facturas|length }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Total Facturado</div>
+                <div class="value">${{ '{:,.0f}'.format(facturas|sum(attribute='total')) }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Propinas</div>
+                <div class="value">${{ '{:,.0f}'.format(facturas|sum(attribute='propina')) }}</div>
+            </div>
+        </div>
+        
+        <div class="facturas-grid">
+            {% for factura in facturas %}
+            <div class="factura-card">
+                <div class="factura-info">
+                    <h3>{{ factura.numero_consecutivo }}</h3>
+                    <p>📅 {{ factura.fecha_emision.strftime('%d/%m/%Y %H:%M') }}</p>
+                    <p>🪑 Mesa {{ factura.sesion.mesa.numero }}</p>
+                    {% if factura.cliente_nombre %}
+                    <p>👤 {{ factura.cliente_nombre }}</p>
+                    {% endif %}
+                    <span class="factura-metodo">
+                        {% if factura.metodo_pago == 'efectivo' %}💵 Efectivo
+                        {% elif factura.metodo_pago == 'tarjeta' %}💳 Tarjeta
+                        {% elif factura.metodo_pago == 'transferencia' %}📱 Transferencia
+                        {% elif factura.metodo_pago == 'mixto' %}🔀 Mixto
+                        {% endif %}
+                    </span>
+                </div>
+                <div style="text-align: right;">
+                    <div class="factura-total">${{ '{:,.0f}'.format(factura.total) }}</div>
+                    <div style="margin-top: 10px;">
+                        <a href="{{ url_for('ver_factura', factura_id=factura.id) }}" class="btn btn-primary">Ver</a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <h2>📭 No hay facturas</h2>
+            <p>No se encontraron facturas para la fecha seleccionada</p>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
