@@ -796,7 +796,36 @@ def cocina():
         Pedido.estado.in_(['pendiente', 'preparando'])
     ).order_by(Pedido.fecha).all()
     
-    return render_template("cocina.html", pedidos=pedidos_pendientes)
+    return render_template(
+        "cocina.html",
+        pedidos=pedidos_pendientes,
+        now=datetime.now()
+    )
+
+@app.route("/api/cocina/pedidos")
+@login_required
+def api_cocina_pedidos():
+    hoy = datetime.now().date()
+    
+    pedidos = Pedido.query.filter(
+        db.func.date(Pedido.fecha) == hoy,
+        Pedido.estado.in_(['pendiente', 'preparando'])
+    ).order_by(Pedido.fecha).all()
+    
+    data = []
+    for p in pedidos:
+        data.append({
+            "id": p.id,
+            "mesa": p.mesa.numero,
+            "producto": p.producto,
+            "cantidad": p.cantidad,
+            "notas": p.notas or "",
+            "estado": p.estado,
+            "fecha": p.fecha.isoformat()
+        })
+    
+    return jsonify(data)
+
 
 @app.route("/actualizar_estado/<int:pedido_id>/<estado>")
 @login_required
@@ -985,6 +1014,41 @@ def administrar_usuarios():
     
     usuarios = Usuario.query.order_by(Usuario.nombre).all()
     return render_template("administrar_usuarios.html", usuarios=usuarios)
+
+
+@app.route("/api/cocina/verificar_nuevos")
+@login_required
+def verificar_nuevos_pedidos():
+    """
+    RAZÓN: Endpoint ligero para verificar nuevos pedidos sin recargar toda la página
+    """
+    hoy = datetime.now().date()
+    
+    # Solo pedidos pendientes y preparando
+    pedidos = Pedido.query.filter(
+        db.func.date(Pedido.fecha) == hoy,
+        Pedido.estado.in_(['pendiente', 'preparando'])
+    ).all()
+    
+    # Devolver solo los IDs y timestamps
+    data = {
+        'pedidos': [
+            {
+                'id': p.id,
+                'mesa': p.mesa.numero,
+                'producto': p.producto,
+                'cantidad': p.cantidad,
+                'estado': p.estado,
+                'timestamp': p.fecha.timestamp()
+            }
+            for p in pedidos
+        ],
+        'total': len(pedidos),
+        'pendientes': len([p for p in pedidos if p.estado == 'pendiente']),
+        'preparando': len([p for p in pedidos if p.estado == 'preparando'])
+    }
+    
+    return jsonify(data)
 
 @app.route("/eliminar_usuario/<int:user_id>", methods=["POST", "GET"])
 @login_required

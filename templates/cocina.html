@@ -4,143 +4,156 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cocina - Restaurante</title>
+    
+    <!-- Usar CSS unificado del sistema -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        /* Estilos específicos para la página de cocina */
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #f8fafc;
-            color: #1e293b;
-            line-height: 1.6;
-        }
-
-        .navbar {
-            background: white;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-        }
-
-        .nav-container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 1rem 1.5rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .nav-brand {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #667eea;
-        }
-
-        .nav-menu {
-            display: flex;
-            gap: 1rem;
-            align-items: center;
-        }
-
-        .nav-link {
-            color: #1e293b;
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            transition: all 0.3s;
-            font-weight: 500;
-        }
-
-        .nav-link:hover {
-            background: #f1f5f9;
-        }
-
-        .nav-logout {
-            color: #ef4444;
-        }
-
-        .nav-user {
-            color: #64748b;
-            font-size: 0.9rem;
-            padding: 0.5rem 1rem;
-            background: #f1f5f9;
-            border-radius: 0.5rem;
-        }
-
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 2rem 1.5rem;
+            background: #f0f4f8;
         }
 
         .cocina-header {
             text-align: center;
-            margin-bottom: 2.5rem;
+            margin-bottom: 2rem;
+            padding: 2rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 1rem;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
         }
 
         .cocina-header h1 {
             font-size: 2.5rem;
             margin-bottom: 0.5rem;
-            color: #1e293b;
+            color: white;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
 
-        .subtitle {
-            color: #64748b;
+        .cocina-header .subtitle {
+            color: rgba(255,255,255,0.9);
             font-size: 1.1rem;
         }
 
-        .refresh-notice {
-            text-align: center;
-            color: #64748b;
-            font-size: 0.9rem;
-            margin-bottom: 1rem;
-            padding: 0.5rem;
-            background: #f1f5f9;
-            border-radius: 0.5rem;
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+            padding: 1rem 1.5rem;
+            border-radius: 0.75rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
 
-        .pedidos-cocina-grid {
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-icon {
+            font-size: 1.5rem;
+        }
+
+        .status-label {
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+
+        .status-value {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .refresh-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: #e7f3ff;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            color: #1e40af;
+        }
+
+        .refresh-indicator.updating {
+            background: #fef3c7;
+            color: #92400e;
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .pedidos-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
             gap: 1.5rem;
         }
 
-        .pedido-cocina-card {
+        .pedido-card {
             background: white;
             border-radius: 1rem;
             padding: 1.5rem;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            border-left: 4px solid #f59e0b;
             transition: all 0.3s;
-            animation: slideIn 0.5s ease-out;
+            position: relative;
+            overflow: hidden;
         }
 
-        @keyframes slideIn {
-            from {
+        .pedido-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 6px;
+            height: 100%;
+            background: #f59e0b;
+        }
+
+        .pedido-card.nuevo {
+            animation: slideInBounce 0.5s ease-out, highlight 2s ease-in-out;
+            border: 2px solid #f59e0b;
+        }
+
+        @keyframes slideInBounce {
+            0% {
                 opacity: 0;
-                transform: translateY(20px);
+                transform: translateY(30px) scale(0.9);
             }
-            to {
+            50% {
+                transform: translateY(-10px) scale(1.02);
+            }
+            100% {
                 opacity: 1;
-                transform: translateY(0);
+                transform: translateY(0) scale(1);
             }
         }
 
-        .pedido-cocina-card:hover {
+        @keyframes highlight {
+            0%, 100% { background: white; }
+            50% { background: #fff7ed; }
+        }
+
+        .pedido-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 8px 25px rgba(0,0,0,0.15);
         }
 
-        .pedido-cocina-card.estado-preparando {
-            border-left-color: #06b6d4;
+        .pedido-card.estado-preparando::before {
+            background: #06b6d4;
         }
 
-        .pedido-cocina-header {
+        .pedido-card.estado-preparando {
+            border-left: 6px solid #06b6d4;
+        }
+
+        .pedido-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -149,99 +162,132 @@
             border-bottom: 2px solid #f1f5f9;
         }
 
-        .pedido-cocina-header h2 {
-            font-size: 1.8rem;
+        .pedido-mesa {
+            font-size: 2rem;
+            font-weight: 700;
             color: #667eea;
         }
 
         .pedido-tiempo {
-            font-size: 1rem;
-            color: #64748b;
-            font-weight: 600;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
         }
 
-        .pedido-cocina-body h3 {
-            margin-bottom: 0.75rem;
-            font-size: 1.3rem;
+        .tiempo-hora {
+            font-size: 1rem;
+            font-weight: 600;
             color: #1e293b;
         }
 
-        .pedido-notas-cocina {
+        .tiempo-transcurrido {
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+
+        .pedido-producto {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 1rem;
+        }
+
+        .pedido-cantidad {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 2rem;
+            height: 2rem;
+            padding: 0 0.5rem;
+            background: #667eea;
+            color: white;
+            border-radius: 0.5rem;
+            font-weight: 700;
+            margin-right: 0.5rem;
+        }
+
+        .pedido-notas {
             background: #fef3c7;
             padding: 1rem;
             border-radius: 0.5rem;
             margin: 1rem 0;
-            font-size: 0.95rem;
             border-left: 3px solid #f59e0b;
         }
 
-        .pedido-notas-cocina strong {
+        .pedido-notas strong {
             color: #92400e;
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+
+        .pedido-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #f1f5f9;
+            font-size: 0.9rem;
+            color: #64748b;
         }
 
         .pedido-mesero {
-            color: #64748b;
-            font-size: 0.9rem;
-            margin-top: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
         }
 
-        .pedido-cocina-actions {
-            margin-top: 1.25rem;
-        }
-
-        .btn {
-            display: block;
-            width: 100%;
-            padding: 1rem;
-            border: none;
-            border-radius: 0.5rem;
-            font-size: 1rem;
+        .estado-badge {
+            padding: 0.35rem 0.85rem;
+            border-radius: 1rem;
+            font-size: 0.8rem;
             font-weight: 600;
-            text-decoration: none;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s;
         }
 
-        .btn-warning {
-            background: #f59e0b;
-            color: white;
+        .estado-pendiente {
+            background: #fee2e2;
+            color: #991b1b;
         }
 
-        .btn-warning:hover {
-            background: #d97706;
-            transform: translateY(-2px);
+        .estado-preparando {
+            background: #dbeafe;
+            color: #1e40af;
         }
 
-        .btn-success {
-            background: #10b981;
-            color: white;
+        .pedido-actions {
+            margin-top: 1.25rem;
+            display: grid;
+            gap: 0.5rem;
         }
 
-        .btn-success:hover {
-            background: #059669;
-            transform: translateY(-2px);
+        .btn-cocina {
+            padding: 1rem;
+            font-size: 1rem;
+            font-weight: 700;
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
         }
 
         .empty-state {
             text-align: center;
-            padding: 4rem 1rem;
-            color: #64748b;
+            padding: 4rem 2rem;
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
 
         .empty-icon {
             font-size: 5rem;
             margin-bottom: 1rem;
-            animation: pulse 2s ease-in-out infinite;
+            animation: float 3s ease-in-out infinite;
         }
 
-        @keyframes pulse {
-            0%, 100% {
-                transform: scale(1);
-            }
-            50% {
-                transform: scale(1.1);
-            }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
         }
 
         .empty-state h2 {
@@ -250,34 +296,98 @@
             color: #1e293b;
         }
 
+        .notification-toast {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            background: #10b981;
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 40px rgba(16, 185, 129, 0.4);
+            display: none;
+            align-items: center;
+            gap: 0.75rem;
+            z-index: 2000;
+            animation: slideInRight 0.5s ease-out;
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .notification-toast.show {
+            display: flex;
+        }
+
+        .notification-icon {
+            font-size: 1.5rem;
+        }
+
+        .notification-text {
+            font-weight: 600;
+        }
+
         @media (max-width: 768px) {
-            .nav-container {
-                flex-direction: column;
-                gap: 1rem;
-            }
-
-            .nav-menu {
-                flex-wrap: wrap;
-                justify-content: center;
-            }
-
             .cocina-header h1 {
                 font-size: 2rem;
             }
 
-            .pedidos-cocina-grid {
+            .status-bar {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .pedidos-grid {
                 grid-template-columns: 1fr;
+            }
+
+            .notification-toast {
+                right: 10px;
+                left: 10px;
+                top: 80px;
+            }
+            .notification-toast {
+                position: fixed;
+                top: 100px;
+                right: 20px;
+                background: #f59e0b;
+                color: white;
+                padding: 1rem 1.5rem;
+                border-radius: 0.75rem;
+                box-shadow: 0 10px 40px rgba(245, 158, 11, 0.5);
+                display: none;
+                align-items: center;
+                gap: 0.75rem;
+                z-index: 2000;
+                animation: slideInRight 0.5s ease-out, shake 0.5s ease-in-out 0.5s;
+                font-weight: 700;
+                font-size: 1.1rem;
+            }
+
+            @keyframes shake {
+                0%, 100% { transform: translateX(0); }
+                10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+                20%, 40%, 60%, 80% { transform: translateX(5px); }
             }
         }
     </style>
 </head>
 <body>
+    <!-- Navbar -->
     <nav class="navbar">
         <div class="nav-container">
-            <div class="nav-brand">🍽️ Restaurante</div>
+            <a href="{{ url_for('dashboard') }}" class="nav-brand">🍽️ Restaurante Manager</a>
             <div class="nav-menu">
-                <a href="{{ url_for('cocina') }}" class="nav-link">Cocina</a>
-                <a href="{{ url_for('historial') }}" class="nav-link">Historial</a>
+                <a href="{{ url_for('cocina') }}" class="nav-link active">👨‍🍳 Cocina</a>
+                <a href="{{ url_for('dashboard') }}" class="nav-link">📊 Dashboard</a>
                 <span class="nav-user">👤 {{ current_user.nombre }}</span>
                 <a href="{{ url_for('logout') }}" class="nav-link nav-logout">Salir</a>
             </div>
@@ -285,44 +395,107 @@
     </nav>
 
     <div class="container">
+        <!-- Header -->
         <div class="cocina-header">
-            <h1>🍳 Pedidos en Cocina</h1>
+            <h1>👨‍🍳 Panel de Cocina</h1>
             <p class="subtitle">Pedidos pendientes y en preparación</p>
         </div>
 
-        <div class="refresh-notice">
-            🔄 Esta página se actualiza automáticamente cada 10 segundos
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-item">
+                <span class="status-icon">📋</span>
+                <div>
+                    <div class="status-label">Total Pedidos</div>
+                    <div class="status-value" id="total-pedidos">{{ pedidos|length }}</div>
+                </div>
+                    <button onclick="playAlertSound(); showToast('🔊 Probando sonido', 'info')" 
+                            class="btn btn-sm" 
+                            style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                        🔊 Probar Sonido
+                    </button>
+            </div>
+
+            <div class="status-item">
+                <span class="status-icon">⏳</span>
+                <div>
+                    <div class="status-label">Pendientes</div>
+                    <div class="status-value" id="pendientes-count">
+                        {{ pedidos|selectattr('estado', 'equalto', 'pendiente')|list|length }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="status-item">
+                <span class="status-icon">🔥</span>
+                <div>
+                    <div class="status-label">En Preparación</div>
+                    <div class="status-value" id="preparando-count">
+                        {{ pedidos|selectattr('estado', 'equalto', 'preparando')|list|length }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="status-item">
+                <span class="refresh-indicator" id="refresh-status">
+                    🔄 Actualizando en <span id="countdown">10</span>s
+                </span>
+            </div>
         </div>
 
-        <div class="cocina-container">
+        <!-- Pedidos Grid -->
+        <div id="pedidos-container">
             {% if pedidos %}
-            <div class="pedidos-cocina-grid">
+            <div class="pedidos-grid" id="pedidos-grid">
                 {% for pedido in pedidos %}
-                <div class="pedido-cocina-card estado-{{ pedido.estado }}">
-                    <div class="pedido-cocina-header">
-                        <h2>Mesa {{ pedido.mesa.numero }}</h2>
-                        <span class="pedido-tiempo">⏰ {{ pedido.fecha.strftime('%H:%M') }}</span>
-                    </div>
-                    
-                    <div class="pedido-cocina-body">
-                        <h3>{{ pedido.cantidad }}x {{ pedido.producto }}</h3>
-                        
-                        {% if pedido.notas %}
-                        <div class="pedido-notas-cocina">
-                            <strong>⚠️ Notas:</strong> {{ pedido.notas }}
+                <div class="pedido-card estado-{{ pedido.estado }}" data-pedido-id="{{ pedido.id }}">
+                    <div class="pedido-header">
+                        <div class="pedido-mesa">Mesa {{ pedido.mesa.numero }}</div>
+                        <div class="pedido-tiempo">
+                            <div class="tiempo-hora">⏰ {{ pedido.fecha.strftime('%H:%M') }}</div>
+                            <div class="tiempo-transcurrido" data-timestamp="{{ pedido.fecha.timestamp() }}">
+                                Hace {{ ((now - pedido.fecha).total_seconds() / 60)|int }} min
+                            </div>
                         </div>
-                        {% endif %}
-                        
-                        <p class="pedido-mesero">👤 Mesero: {{ pedido.mesero.nombre }}</p>
                     </div>
                     
-                    <div class="pedido-cocina-actions">
+                    <div class="pedido-producto">
+                        <span class="pedido-cantidad">{{ pedido.cantidad }}</span>
+                        {{ pedido.producto }}
+                    </div>
+                    
+                    {% if pedido.notas %}
+                    <div class="pedido-notas">
+                        <strong>⚠️ Notas Especiales:</strong>
+                        {{ pedido.notas }}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="pedido-info">
+                        <div class="pedido-mesero">
+                            <span>👤</span>
+                            <span>{{ pedido.mesero.nombre }}</span>
+                        </div>
+                        <span class="estado-badge estado-{{ pedido.estado }}">
+                            {% if pedido.estado == 'pendiente' %}
+                                ⏳ Pendiente
+                            {% else %}
+                                🔥 Preparando
+                            {% endif %}
+                        </span>
+                    </div>
+                    
+                    <div class="pedido-actions">
                         {% if pedido.estado == 'pendiente' %}
                         <a href="{{ url_for('actualizar_estado', pedido_id=pedido.id, estado='preparando') }}" 
-                           class="btn btn-warning">⏳ Comenzar a Preparar</a>
+                           class="btn btn-warning btn-cocina">
+                            🔥 Comenzar a Preparar
+                        </a>
                         {% elif pedido.estado == 'preparando' %}
                         <a href="{{ url_for('actualizar_estado', pedido_id=pedido.id, estado='listo') }}" 
-                           class="btn btn-success">✓ Marcar como Listo</a>
+                           class="btn btn-success btn-cocina">
+                            ✅ Marcar como Listo
+                        </a>
                         {% endif %}
                     </div>
                 </div>
@@ -332,31 +505,389 @@
             <div class="empty-state">
                 <div class="empty-icon">✨</div>
                 <h2>No hay pedidos pendientes</h2>
-                <p>Todos los pedidos están listos o entregados</p>
+                <p class="text-muted">Todos los pedidos están listos o entregados</p>
             </div>
             {% endif %}
         </div>
     </div>
 
-    <script>
-        // Auto-refresh cada 10 segundos
-        setTimeout(function() {
-            location.reload();
-        }, 10000);
+    <!-- Notificación Toast -->
+    <div class="notification-toast" id="notification">
+        <span class="notification-icon">🔔</span>
+        <div class="notification-text">¡Nuevo pedido en cocina!</div>
+    </div>
 
-        // Mostrar contador regresivo
-        let seconds = 10;
-        const notice = document.querySelector('.refresh-notice');
-        const originalText = notice.textContent;
-        
-        setInterval(() => {
-            seconds--;
-            if (seconds > 0) {
-                notice.textContent = `🔄 Actualizando en ${seconds} segundos...`;
-            } else {
-                notice.textContent = '🔄 Actualizando...';
+    <!-- Audio para alerta (silencioso por defecto, se reproduce con interacción) -->
+    <audio id="alert-sound" preload="auto">
+        <!-- Usamos una frecuencia de audio generada -->
+    </audio>
+
+    <script>
+         // ============================================
+        // CONFIGURACIÓN
+        // ============================================
+        const REFRESH_INTERVAL = 5000; // 5 segundos (más frecuente)
+        const CHECK_INTERVAL = 3000; // 3 segundos para verificación rápida
+        let currentPedidosIds = new Set();
+        let countdown = 5;
+        let hasUserInteracted = false;
+        let lastNotificationTime = 0;
+        const NOTIFICATION_COOLDOWN = 2000; // 2 segundos entre notificaciones
+
+        // ============================================
+        // SOLICITAR PERMISOS DE NOTIFICACIÓN
+        // ============================================
+        function requestNotificationPermission() {
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
             }
-        }, 1000);
+        }
+
+        // ============================================
+        // MOSTRAR NOTIFICACIÓN DEL NAVEGADOR
+        // ============================================
+        function showBrowserNotification(message, pedido) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                const notification = new Notification('🍽️ Nuevo Pedido en Cocina', {
+                    body: message,
+                    icon: '/static/favicon.ico',
+                    badge: '/static/favicon.ico',
+                    tag: 'cocina-pedido',
+                    requireInteraction: true,
+                    vibrate: [200, 100, 200, 100, 200]
+                });
+                
+                notification.onclick = function() {
+                    window.focus();
+                    notification.close();
+                };
+                
+                setTimeout(() => notification.close(), 10000);
+            }
+        }
+
+        // ============================================
+        // GENERAR SONIDO DE ALERTA POTENTE 🚨
+        // ============================================
+        function createAlertSound() {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            return function playAlert() {
+                if (!hasUserInteracted) {
+                    console.log('⚠️ Haz click en la página para activar el sonido');
+                    return;
+                }
+                
+                // Verificar cooldown
+                const now = Date.now();
+                if (now - lastNotificationTime < NOTIFICATION_COOLDOWN) {
+                    return;
+                }
+                lastNotificationTime = now;
+                
+                // ALARMA TIPO SIRENA - MÁS POTENTE
+                const duration = 0.3;
+                const volume = 0.7; // VOLUMEN MÁS ALTO (0.7 = 70%)
+                
+                // Patrón de sirena: 3 repeticiones de sube-baja
+                for (let repeat = 0; repeat < 3; repeat++) {
+                    setTimeout(() => {
+                        // Sonido 1: Frecuencia que sube (efecto sirena)
+                        const oscillator1 = audioContext.createOscillator();
+                        const gainNode1 = audioContext.createGain();
+                        
+                        oscillator1.connect(gainNode1);
+                        gainNode1.connect(audioContext.destination);
+                        
+                        oscillator1.type = 'square'; // Onda cuadrada = más agresivo
+                        oscillator1.frequency.setValueAtTime(800, audioContext.currentTime);
+                        oscillator1.frequency.exponentialRampToValueAtTime(1200, audioContext.currentTime + duration);
+                        
+                        gainNode1.gain.setValueAtTime(volume, audioContext.currentTime);
+                        gainNode1.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+                        
+                        oscillator1.start(audioContext.currentTime);
+                        oscillator1.stop(audioContext.currentTime + duration);
+                        
+                        // Sonido 2: Frecuencia que baja (efecto sirena inverso)
+                        setTimeout(() => {
+                            const oscillator2 = audioContext.createOscillator();
+                            const gainNode2 = audioContext.createGain();
+                            
+                            oscillator2.connect(gainNode2);
+                            gainNode2.connect(audioContext.destination);
+                            
+                            oscillator2.type = 'square';
+                            oscillator2.frequency.setValueAtTime(1200, audioContext.currentTime);
+                            oscillator2.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + duration);
+                            
+                            gainNode2.gain.setValueAtTime(volume, audioContext.currentTime);
+                            gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+                            
+                            oscillator2.start(audioContext.currentTime);
+                            oscillator2.stop(audioContext.currentTime + duration);
+                        }, duration * 1000);
+                        
+                    }, repeat * 700); // Repetir cada 700ms
+                }
+                
+                // VIBRACIÓN MÁS LARGA Y POTENTE
+                if ('vibrate' in navigator) {
+                    navigator.vibrate([300, 100, 300, 100, 300, 100, 300]);
+                }
+            };
+        }
+
+        const playAlertSound = createAlertSound();
+
+        // ============================================
+        // DETECTAR INTERACCIÓN DEL USUARIO
+        // ============================================
+        document.addEventListener('click', () => {
+            if (!hasUserInteracted) {
+                hasUserInteracted = true;
+                console.log('✅ Sonido activado');
+                showToast('🔊 Sonido de alertas activado', 'success');
+            }
+        }, { once: true });
+
+        document.addEventListener('keydown', () => {
+            if (!hasUserInteracted) {
+                hasUserInteracted = true;
+                console.log('✅ Sonido activado');
+            }
+        }, { once: true });
+
+        // Solicitar permisos al cargar
+        setTimeout(requestNotificationPermission, 2000);
+
+        // ============================================
+        // INICIALIZAR IDS DE PEDIDOS ACTUALES
+        // ============================================
+        document.querySelectorAll('.pedido-card').forEach(card => {
+            currentPedidosIds.add(card.dataset.pedidoId);
+        });
+
+        // ============================================
+        // MOSTRAR NOTIFICACIÓN TOAST
+        // ============================================
+        function showToast(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            const notificationText = notification.querySelector('.notification-text');
+            
+            // Cambiar color según tipo
+            if (type === 'success') {
+                notification.style.background = '#10b981';
+            } else if (type === 'warning') {
+                notification.style.background = '#f59e0b';
+            } else if (type === 'error') {
+                notification.style.background = '#ef4444';
+            } else {
+                notification.style.background = '#3b82f6';
+            }
+            
+            notificationText.textContent = message;
+            notification.classList.add('show');
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 5000);
+        }
+
+        // ============================================
+        // ACTUALIZAR TIEMPO TRANSCURRIDO
+        // ============================================
+        function updateElapsedTimes() {
+            const now = Date.now() / 1000;
+            document.querySelectorAll('.tiempo-transcurrido').forEach(el => {
+                const timestamp = parseFloat(el.dataset.timestamp);
+                const minutes = Math.floor((now - timestamp) / 60);
+                el.textContent = `Hace ${minutes} min`;
+                
+                // Cambiar color según tiempo
+                if (minutes > 20) {
+                    el.style.color = '#dc2626';
+                    el.style.fontWeight = '700';
+                    el.parentElement.parentElement.parentElement.style.borderColor = '#dc2626';
+                } else if (minutes > 15) {
+                    el.style.color = '#ef4444';
+                    el.style.fontWeight = '700';
+                } else if (minutes > 10) {
+                    el.style.color = '#f59e0b';
+                }
+            });
+        }
+
+        // ============================================
+        // VERIFICAR NUEVOS PEDIDOS (API LIGERA)
+        // ============================================
+        let isChecking = false;
+
+        async function checkNewPedidos() {
+            if (isChecking) return;
+            isChecking = true;
+            
+            try {
+                const response = await fetch('/api/cocina/verificar_nuevos');
+                const data = await response.json();
+                
+                let hasNewPedidos = false;
+                let newPedidosList = [];
+                
+                data.pedidos.forEach(pedido => {
+                    if (!currentPedidosIds.has(pedido.id.toString())) {
+                        hasNewPedidos = true;
+                        currentPedidosIds.add(pedido.id.toString());
+                        newPedidosList.push(pedido);
+                    }
+                });
+                
+                if (hasNewPedidos) {
+                    console.log('🆕 Nuevos pedidos detectados:', newPedidosList);
+                    
+                    // Reproducir sonido
+                    playAlertSound();
+                    
+                    // Mostrar toast
+                    const mensaje = newPedidosList.length === 1
+                        ? `Mesa ${newPedidosList[0].mesa}: ${newPedidosList[0].cantidad}x ${newPedidosList[0].producto}`
+                        : `${newPedidosList.length} nuevos pedidos en cocina`;
+                    
+                    showToast(`🔔 ${mensaje}`, 'warning');
+                    
+                    // Notificación del navegador
+                    showBrowserNotification(mensaje, newPedidosList[0]);
+                    
+                    // Recargar página para mostrar los pedidos
+                    setTimeout(() => {
+                        updatePage();
+                    }, 500);
+                }
+                
+                // Actualizar contadores sin recargar
+                if (!hasNewPedidos) {
+                    document.getElementById('total-pedidos').textContent = data.total;
+                    document.getElementById('pendientes-count').textContent = data.pendientes;
+                    document.getElementById('preparando-count').textContent = data.preparando;
+                }
+                
+            } catch (error) {
+                console.error('❌ Error al verificar pedidos:', error);
+            } finally {
+                isChecking = false;
+            }
+        }
+
+        // ============================================
+        // ACTUALIZAR PÁGINA COMPLETA
+        // ============================================
+        async function updatePage() {
+            try {
+                const refreshStatus = document.getElementById('refresh-status');
+                refreshStatus.classList.add('updating');
+                
+                const response = await fetch(window.location.href);
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                // Obtener nuevos pedidos
+                const newPedidosContainer = doc.querySelector('#pedidos-container');
+                const newPedidosCards = doc.querySelectorAll('.pedido-card');
+                
+                // Actualizar set de IDs
+                const newIds = new Set();
+                newPedidosCards.forEach(card => {
+                    const pedidoId = card.dataset.pedidoId;
+                    newIds.add(pedidoId);
+                    
+                    // Marcar como nuevo si no existía antes
+                    if (!currentPedidosIds.has(pedidoId)) {
+                        card.classList.add('nuevo');
+                    }
+                });
+                
+                currentPedidosIds = newIds;
+                
+                // Actualizar contenido
+                if (newPedidosContainer) {
+                    document.getElementById('pedidos-container').innerHTML = newPedidosContainer.innerHTML;
+                }
+                
+                // Actualizar contadores
+                document.getElementById('total-pedidos').textContent = 
+                    doc.getElementById('total-pedidos').textContent;
+                document.getElementById('pendientes-count').textContent = 
+                    doc.getElementById('pendientes-count').textContent;
+                document.getElementById('preparando-count').textContent = 
+                    doc.getElementById('preparando-count').textContent;
+                
+                refreshStatus.classList.remove('updating');
+                
+            } catch (error) {
+                console.error('❌ Error al actualizar:', error);
+                showToast('Error al actualizar la página', 'error');
+            }
+        }
+
+        // ============================================
+        // CONTADOR REGRESIVO
+        // ============================================
+        function updateCountdown() {
+            countdown--;
+            document.getElementById('countdown').textContent = countdown;
+            
+            if (countdown <= 0) {
+                countdown = 5;
+                updatePage();
+            }
+        }
+
+        // ============================================
+        // INICIAR TIMERS
+        // ============================================
+
+        // Verificación rápida cada 3 segundos
+        setInterval(checkNewPedidos, CHECK_INTERVAL);
+
+        // Actualización completa cada 5 segundos
+        setInterval(updateCountdown, 1000);
+
+        // Actualizar tiempos transcurridos cada 30 segundos
+        setInterval(updateElapsedTimes, 30000);
+
+        // Actualizar tiempos al cargar
+        updateElapsedTimes();
+
+        // Primera verificación después de 2 segundos
+        setTimeout(checkNewPedidos, 2000);
+
+        // ============================================
+        // MANEJO DE VISIBILIDAD DE LA PÁGINA
+        // ============================================
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                // Cuando vuelven a la página, verificar inmediatamente
+                console.log('👀 Página visible, verificando pedidos...');
+                checkNewPedidos();
+                updatePage();
+            }
+        });
+
+        // ============================================
+        // MENSAJE INICIAL
+        // ============================================
+        console.log('🔔 Sistema de alertas de cocina activo');
+        console.log('👆 Haz click en cualquier parte para activar el sonido');
+        console.log('🔄 Verificación automática cada 3 segundos');
+        console.log('📱 Notificaciones del navegador disponibles');
+
+        // Mostrar mensaje inicial
+        setTimeout(() => {
+            if (!hasUserInteracted) {
+                showToast('👆 Haz click para activar el sonido de alertas', 'info');
+            }
+        }, 3000);
     </script>
 </body>
 </html>
