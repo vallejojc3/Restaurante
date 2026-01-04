@@ -2,7 +2,7 @@ from flask import Flask, render_template, redirect, url_for, request, flash, ses
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, timedelta,date
 import os
 from flask import jsonify, make_response
 import json
@@ -111,11 +111,17 @@ class Factura(db.Model):
     iva = db.Column(db.Float, default=0)
     propina = db.Column(db.Float, default=0)
     total = db.Column(db.Float, default=0)
-    metodo_pago = db.Column(db.String(50), default='efectivo')  # efectivo, tarjeta, transferencia, mixto
-    desglose_pago = db.Column(db.Text)  # JSON con desglose si es mixto
+    metodo_pago = db.Column(db.String(50), default='efectivo')
+    desglose_pago = db.Column(db.Text)
     cliente_nombre = db.Column(db.String(200))
     cliente_documento = db.Column(db.String(50))
     notas = db.Column(db.Text)
+    
+    # ========== NUEVOS CAMPOS PARA CUENTAS POR COBRAR ==========
+    estado_pago = db.Column(db.String(20), default='pagada')  # pagada, pendiente, vencida
+    fecha_vencimiento = db.Column(db.Date, nullable=True)  # Cuándo debe pagar el cliente
+    fecha_pago_real = db.Column(db.DateTime, nullable=True)  # Cuándo pagó realmente
+    saldo_pendiente = db.Column(db.Float, default=0)  # Si pagó parcialmente
     
     sesion = db.relationship('Sesion', backref='facturas')
 
@@ -134,14 +140,160 @@ class ConfiguracionRestaurante(db.Model):
     iva_porcentaje = db.Column(db.Float, default=19.0)
     logo_url = db.Column(db.String(500))
 
+class Presupuesto(db.Model):
+    """
+    RAZÓN: Define límites de gasto por categoría y período.
+    Permite alertas automáticas cuando se supera el presupuesto.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    categoria_id = db.Column(db.Integer, db.ForeignKey('categoria_gasto.id'), nullable=False)
+    monto_limite = db.Column(db.Float, nullable=False)  # Límite de gasto
+    periodo = db.Column(db.String(20), default='mensual')  # mensual, semanal, anual
+    mes = db.Column(db.Integer, nullable=True)  # 1-12 para identificar el mes
+    anio = db.Column(db.Integer, nullable=True)  # 2026, 2027, etc.
+    activo = db.Column(db.Boolean, default=True)
+    fecha_creacion = db.Column(db.DateTime, default=datetime.now)
+    
+    # Alertas
+    alerta_porcentaje = db.Column(db.Integer, default=80)  # Alertar al 80%
+    
+    categoria = db.relationship('CategoriaGasto', backref='presupuestos')
+    
+    @property
+    def gasto_actual(self):
+        """Calcula cuánto se ha gastado en esta categoría en el período"""
+        from datetime import date
+        
+        if self.periodo == 'mensual' and self.mes and self.anio:
+            # Primer y último día del mes
+            fecha_inicio = date(self.anio, self.mes, 1)
+            if self.mes == 12:
+                fecha_fin = date(self.anio + 1, 1, 1)
+            else:
+                fecha_fin = date(self.anio, self.mes + 1, 1)
+            
+            # Sumar gastos del mes
+            total = db.session.query(
+                db.func.sum(Gasto.monto)
+            ).filter(
+                Gasto.categoria_id == self.categoria_id,
+                Gasto.fecha >= fecha_inicio,
+                Gasto.fecha < fecha_fin
+            ).scalar() or 0
+            
+            return float(total)
+        
+        return 0
+    
+    @property
+    def porcentaje_usado(self):
+        """Porcentaje del presupuesto que se ha usado"""
+        if self.monto_limite > 0:
+            return (self.gasto_actual / self.monto_limite) * 100
+        return 0
+    
+    @property
+    def disponible(self):
+        """Cuánto dinero queda disponible"""
+        return self.monto_limite - self.gasto_actual
+    
+    @property
+    def estado(self):
+        """Estado del presupuesto: normal, alerta, excedido"""
+        porcentaje = self.porcentaje_usado
+        if porcentaje >= 100:
+            return 'excedido'
+        elif porcentaje >= self.alerta_porcentaje:
+            return 'alerta'
+        else:
+            return 'normal'
+
+# AGREGAR ESTOS MODELOS DESPUÉS DE LA CLASE ConfiguracionRestaurante
+
+class CategoriaGasto(db.Model):
+    """
+    RAZÓN: Organizar los gastos por categorías facilita el análisis.
+    Ejemplo: "Ingredientes", "Salarios", "Servicios", "Mantenimiento"
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(100), nullable=False)
+    descripcion = db.Column(db.Text)
+    color = db.Column(db.String(7), default='#6c757d')  # Color hex para visualización
+    activa = db.Column(db.Boolean, default=True)
+    
+    # Relación: Una categoría puede tener muchos gastos
+    gastos = db.relationship('Gasto', backref='categoria', lazy=True)
+
+
+class Proveedor(db.Model):
+    """
+    RAZÓN: Registrar proveedores permite:
+    - Autocompletar datos al crear gastos
+    - Analizar qué proveedor es más usado
+    - Llevar control de contactos
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(200), nullable=False)
+    nit = db.Column(db.String(50))
+    telefono = db.Column(db.String(50))
+    email = db.Column(db.String(100))
+    direccion = db.Column(db.String(300))
+    notas = db.Column(db.Text)
+    activo = db.Column(db.Boolean, default=True)
+    fecha_registro = db.Column(db.DateTime, default=datetime.now)
+    
+    # Relación: Un proveedor puede tener muchos gastos
+    gastos = db.relationship('Gasto', backref='proveedor', lazy=True)
+
+
+class Gasto(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # Información básica del gasto (YA EXISTE)
+    fecha = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    concepto = db.Column(db.String(300), nullable=False)
+    monto = db.Column(db.Float, nullable=False)
+    
+    # Relaciones con otras tablas (YA EXISTE)
+    categoria_id = db.Column(db.Integer, db.ForeignKey('categoria_gasto.id'), nullable=False)
+    proveedor_id = db.Column(db.Integer, db.ForeignKey('proveedor.id'), nullable=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    
+    # Información adicional (YA EXISTE)
+    metodo_pago = db.Column(db.String(50), default='efectivo')
+    numero_factura = db.Column(db.String(100))
+    notas = db.Column(db.Text)
+    archivo_adjunto = db.Column(db.String(500))
+    
+    # Control (YA EXISTE)
+    aprobado = db.Column(db.Boolean, default=True)
+    fecha_aprobacion = db.Column(db.DateTime)
+    aprobado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=True)
+    
+    # ========== NUEVOS CAMPOS PARA CUENTAS POR PAGAR ==========
+    estado_pago = db.Column(db.String(20), default='pagado')  # pagado, pendiente, vencido
+    fecha_vencimiento = db.Column(db.Date, nullable=True)  # Cuándo se debe pagar
+    fecha_pago_real = db.Column(db.DateTime, nullable=True)  # Cuándo se pagó realmente
+    
+    # Relaciones
+    usuario = db.relationship('Usuario', foreign_keys=[usuario_id], backref='gastos_registrados')
+    aprobado_por = db.relationship('Usuario', foreign_keys=[aprobado_por_id], backref='gastos_aprobados')
 
 # =========================
 # RUTAS
 # =========================
+# ==========================================
+# ACTUALIZAR RUTA DE FACTURAR SESIÓN
+# ==========================================
+
+# REEMPLAZA tu ruta actual de facturar_sesion con esta versión mejorada:
+
 @app.route("/facturar_sesion/<int:sesion_id>", methods=["GET", "POST"])
 @login_required
 def facturar_sesion(sesion_id):
-    """Generar factura para una sesión"""
+    """
+    Generar factura para una sesión - AHORA CON ESTADO DE PAGO
+    """
     sesion = Sesion.query.get_or_404(sesion_id)
     config = ConfiguracionRestaurante.query.first()
     
@@ -157,6 +309,10 @@ def facturar_sesion(sesion_id):
         cliente_nombre = request.form.get("cliente_nombre", "")
         cliente_documento = request.form.get("cliente_documento", "")
         notas = request.form.get("notas", "")
+        
+        # NUEVOS CAMPOS
+        estado_pago = request.form.get("estado_pago", "pagada")
+        fecha_vencimiento_str = request.form.get("fecha_vencimiento")
         
         # Desglose de pago para método mixto
         desglose_pago = None
@@ -182,6 +338,18 @@ def facturar_sesion(sesion_id):
         
         numero_consecutivo = f"FACT-{nuevo_num:06d}"
         
+        # Convertir fecha de vencimiento
+        fecha_vencimiento = None
+        if fecha_vencimiento_str and estado_pago == 'pendiente':
+            from datetime import datetime as dt  # IMPORTANTE
+            fecha_vencimiento = dt.strptime(fecha_vencimiento_str, '%Y-%m-%d').date()
+        
+        # Fecha de pago real
+        fecha_pago_real = datetime.now() if estado_pago == 'pagada' else None
+        
+        # Saldo pendiente
+        saldo_pendiente = total if estado_pago == 'pendiente' else 0
+        
         # Crear factura
         factura = Factura(
             numero_consecutivo=numero_consecutivo,
@@ -194,7 +362,11 @@ def facturar_sesion(sesion_id):
             desglose_pago=json.dumps(desglose_pago) if desglose_pago else None,
             cliente_nombre=cliente_nombre,
             cliente_documento=cliente_documento,
-            notas=notas
+            notas=notas,
+            estado_pago=estado_pago,
+            fecha_vencimiento=fecha_vencimiento,
+            fecha_pago_real=fecha_pago_real,
+            saldo_pendiente=saldo_pendiente
         )
         
         # Actualizar sesión
@@ -213,16 +385,19 @@ def facturar_sesion(sesion_id):
         flash(f'Factura {numero_consecutivo} generada exitosamente', 'success')
         return redirect(url_for('ver_factura', factura_id=factura.id))
     
-    # Calcular totales para mostrar en el formulario
+    # GET: Calcular totales para mostrar en el formulario
     subtotal = sum(p.cantidad * p.precio_unitario for p in sesion.pedidos)
     iva = 0  # Sin IVA
     
+    # ============================================
+    # SOLUCIÓN: PASAR datetime AL TEMPLATE
+    # ============================================
     return render_template("facturar_sesion.html", 
                          sesion=sesion, 
                          config=config,
                          subtotal=subtotal,
                          iva=iva,
-                         datetime=datetime)
+                         datetime=datetime)  # ← ESTA LÍNEA ES CLAVE
 
 @app.route("/factura/<int:factura_id>")
 @login_required
@@ -261,6 +436,107 @@ def lista_facturas():
         facturas = Factura.query.order_by(Factura.fecha_emision.desc()).limit(50).all()
     
     return render_template("lista_facturas.html", facturas=facturas)
+
+# ==========================================
+# RUTAS PARA CUENTAS POR COBRAR
+# ==========================================
+
+@app.route("/cuentas_por_cobrar")
+@login_required
+def cuentas_por_cobrar():
+    """
+    RAZÓN: Vista principal de deudas de clientes.
+    Muestra facturas pendientes de cobro y vencidas.
+    """
+    # Obtener filtros
+    estado = request.args.get('estado', 'todos')  # todos, pendiente, vencida, pagada
+    
+    # Query base
+    query = Factura.query
+    
+    # Aplicar filtros
+    if estado != 'todos':
+        query = query.filter(Factura.estado_pago == estado)
+    
+    # Ordenar por fecha de vencimiento
+    facturas = query.order_by(Factura.fecha_vencimiento).all()
+    
+    # Actualizar estados de facturas vencidas automáticamente
+    from datetime import date
+    hoy = date.today()
+    
+    for factura in facturas:
+        if factura.estado_pago == 'pendiente' and factura.fecha_vencimiento and factura.fecha_vencimiento < hoy:
+            factura.estado_pago = 'vencida'
+    
+    db.session.commit()
+    
+    # Calcular totales
+    total_pendiente = sum(f.saldo_pendiente or f.total for f in facturas if f.estado_pago == 'pendiente')
+    total_vencido = sum(f.saldo_pendiente or f.total for f in facturas if f.estado_pago == 'vencida')
+    total_general = total_pendiente + total_vencido
+    
+    # Agrupar por cliente
+    facturas_por_cliente = {}
+    for factura in facturas:
+        if factura.estado_pago in ['pendiente', 'vencida'] and factura.cliente_nombre:
+            cliente = factura.cliente_nombre
+            if cliente not in facturas_por_cliente:
+                facturas_por_cliente[cliente] = {
+                    'cliente': cliente,
+                    'total': 0,
+                    'cantidad': 0
+                }
+            facturas_por_cliente[cliente]['total'] += (factura.saldo_pendiente or factura.total)
+            facturas_por_cliente[cliente]['cantidad'] += 1
+    
+    # ============================================
+    # SOLUCIÓN: AGREGAR datetime AL RETURN
+    # ============================================
+    return render_template("cuentas/cuentas_por_cobrar.html",
+                         facturas=facturas,
+                         total_pendiente=total_pendiente,
+                         total_vencido=total_vencido,
+                         total_general=total_general,
+                         facturas_por_cliente=facturas_por_cliente.values(),
+                         estado_filtro=estado,
+                         datetime=datetime)  # ← AGREGAR ESTA LÍNEA
+                         
+
+@app.route("/marcar_factura_pagada/<int:factura_id>", methods=["POST"])
+@login_required
+def marcar_factura_pagada(factura_id):
+    """
+    RAZÓN: Marca una factura como pagada cuando el cliente paga.
+    """
+    factura = Factura.query.get_or_404(factura_id)
+    
+    monto_pago = request.form.get('monto_pago', type=float)
+    
+    if not monto_pago:
+        monto_pago = factura.saldo_pendiente or factura.total
+    
+    # Calcular saldo pendiente
+    saldo_actual = factura.saldo_pendiente or factura.total
+    nuevo_saldo = saldo_actual - monto_pago
+    
+    if nuevo_saldo <= 0:
+        # Pago completo
+        factura.estado_pago = 'pagada'
+        factura.saldo_pendiente = 0
+        factura.fecha_pago_real = datetime.now()
+        flash(f'Factura {factura.numero_consecutivo} marcada como pagada completamente', 'success')
+    else:
+        # Pago parcial
+        factura.saldo_pendiente = nuevo_saldo
+        flash(f'Pago parcial registrado. Saldo pendiente: ${nuevo_saldo:,.2f}', 'success')
+    
+    db.session.commit()
+    
+    return redirect(request.referrer or url_for('cuentas_por_cobrar'))
+
+
+
 
 @app.route("/configuracion_restaurante", methods=["GET", "POST"])
 @login_required
@@ -913,6 +1189,566 @@ def eliminar_categoria(categoria_id):
     
     return redirect(url_for('administrar_menu'))
 
+# ==========================================
+# RUTAS PARA GESTIÓN DE GASTOS
+# ==========================================
+
+@app.route("/gastos")
+@login_required
+def lista_gastos():
+    """
+    RAZÓN: Vista principal de gastos con filtros por fecha y categoría.
+    Permite búsqueda rápida y visualización de totales.
+    """
+    # Obtener parámetros de filtro
+    fecha_inicio = request.args.get('fecha_inicio')
+    fecha_fin = request.args.get('fecha_fin')
+    categoria_id = request.args.get('categoria_id', type=int)
+    
+    # Query base
+    query = Gasto.query
+    
+    # Aplicar filtros
+    if fecha_inicio:
+        try:
+            fecha_inicio_obj = datetime.strptime(fecha_inicio, '%Y-%m-%d')
+            query = query.filter(Gasto.fecha >= fecha_inicio_obj)
+        except ValueError:
+            flash('Fecha de inicio inválida', 'error')
+    
+    if fecha_fin:
+        try:
+            fecha_fin_obj = datetime.strptime(fecha_fin, '%Y-%m-%d')
+            # Agregar 1 día para incluir todo el día final
+            fecha_fin_obj = fecha_fin_obj.replace(hour=23, minute=59, second=59)
+            query = query.filter(Gasto.fecha <= fecha_fin_obj)
+        except ValueError:
+            flash('Fecha de fin inválida', 'error')
+    
+    if categoria_id:
+        query = query.filter(Gasto.categoria_id == categoria_id)
+    
+    # Obtener gastos ordenados por fecha descendente
+    gastos = query.order_by(Gasto.fecha.desc()).all()
+    
+    # Calcular totales
+    total_gastos = sum(g.monto for g in gastos)
+    
+    # Totales por categoría (para el dashboard)
+    totales_por_categoria = db.session.query(
+        CategoriaGasto.nombre,
+        CategoriaGasto.color,
+        db.func.sum(Gasto.monto).label('total')
+    ).join(Gasto).group_by(CategoriaGasto.id).all()
+    
+    # Obtener todas las categorías para el filtro
+    categorias = CategoriaGasto.query.filter_by(activa=True).order_by(CategoriaGasto.nombre).all()
+    
+    return render_template("gastos/lista_gastos.html",
+                         gastos=gastos,
+                         total_gastos=total_gastos,
+                         totales_por_categoria=totales_por_categoria,
+                         categorias=categorias,
+                         fecha_inicio=fecha_inicio,
+                         fecha_fin=fecha_fin,
+                         categoria_id=categoria_id)
+
+
+# ==========================================
+# ACTUALIZAR RUTA DE NUEVO GASTO
+# ==========================================
+
+# REEMPLAZA tu ruta actual de nuevo_gasto con esta versión mejorada:
+
+@app.route("/gasto/nuevo", methods=["GET", "POST"])
+@login_required
+def nuevo_gasto():
+    """
+    RAZÓN: Formulario para registrar un nuevo gasto.
+    Ahora incluye estado de pago y fecha de vencimiento.
+    """
+    if current_user.rol == 'cocina':
+        flash('No tienes permisos para registrar gastos', 'error')
+        return redirect(url_for('dashboard'))
+    
+    if request.method == "POST":
+        try:
+            # Obtener datos del formulario
+            fecha_str = request.form.get("fecha")
+            concepto = request.form.get("concepto")
+            monto = request.form.get("monto", type=float)
+            categoria_id = request.form.get("categoria_id", type=int)
+            proveedor_id = request.form.get("proveedor_id", type=int) or None
+            metodo_pago = request.form.get("metodo_pago", "efectivo")
+            numero_factura = request.form.get("numero_factura", "")
+            notas = request.form.get("notas", "")
+            
+            # NUEVOS CAMPOS
+            estado_pago = request.form.get("estado_pago", "pagado")
+            fecha_vencimiento_str = request.form.get("fecha_vencimiento")
+            
+            # Validaciones básicas
+            if not concepto or monto <= 0:
+                flash('Debes completar todos los campos requeridos', 'error')
+                return redirect(url_for('nuevo_gasto'))
+            
+            # Convertir fecha
+            if fecha_str:
+                fecha = datetime.strptime(fecha_str, '%Y-%m-%dT%H:%M')
+            else:
+                fecha = datetime.now()
+            
+            # Convertir fecha de vencimiento
+            fecha_vencimiento = None
+            if fecha_vencimiento_str and estado_pago == 'pendiente':
+                fecha_vencimiento = datetime.strptime(fecha_vencimiento_str, '%Y-%m-%d').date()
+            
+            # Si está pagado, la fecha de pago es ahora
+            fecha_pago_real = datetime.now() if estado_pago == 'pagado' else None
+            
+            # Crear gasto
+            gasto = Gasto(
+                fecha=fecha,
+                concepto=concepto,
+                monto=monto,
+                categoria_id=categoria_id,
+                proveedor_id=proveedor_id,
+                usuario_id=current_user.id,
+                metodo_pago=metodo_pago,
+                numero_factura=numero_factura,
+                notas=notas,
+                estado_pago=estado_pago,
+                fecha_vencimiento=fecha_vencimiento,
+                fecha_pago_real=fecha_pago_real
+            )
+            
+            db.session.add(gasto)
+            db.session.commit()
+            
+            # Verificar si se excedió el presupuesto
+            verificar_presupuesto(categoria_id)
+            
+            flash(f'Gasto de ${monto:,.2f} registrado exitosamente', 'success')
+            return redirect(url_for('lista_gastos'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error al registrar el gasto: {str(e)}', 'error')
+            return redirect(url_for('nuevo_gasto'))
+    
+    # GET: Mostrar formulario
+    categorias = CategoriaGasto.query.filter_by(activa=True).order_by(CategoriaGasto.nombre).all()
+    proveedores = Proveedor.query.filter_by(activo=True).order_by(Proveedor.nombre).all()
+    
+    return render_template("gastos/nuevo_gasto.html",
+                         categorias=categorias,
+                         proveedores=proveedores,
+                         now=datetime.now())
+
+
+# Función auxiliar para verificar presupuestos
+def verificar_presupuesto(categoria_id):
+    """
+    RAZÓN: Verifica si se excedió el presupuesto de una categoría
+    y genera alertas en flash messages.
+    """
+    from datetime import datetime
+    mes_actual = datetime.now().month
+    anio_actual = datetime.now().year
+    
+    presupuesto = Presupuesto.query.filter_by(
+        categoria_id=categoria_id,
+        mes=mes_actual,
+        anio=anio_actual,
+        activo=True
+    ).first()
+    
+    if presupuesto:
+        porcentaje = presupuesto.porcentaje_usado
+        categoria = presupuesto.categoria.nombre
+        
+        if porcentaje >= 100:
+            flash(f'⚠️ ALERTA: Presupuesto de "{categoria}" EXCEDIDO ({porcentaje:.1f}%)', 'error')
+        elif porcentaje >= presupuesto.alerta_porcentaje:
+            flash(f'⚠️ Advertencia: Presupuesto de "{categoria}" al {porcentaje:.1f}%', 'error')
+
+
+
+@app.route("/gasto/editar/<int:gasto_id>", methods=["GET", "POST"])
+@login_required
+def editar_gasto(gasto_id):
+    """
+    RAZÓN: Permite corregir errores en gastos registrados.
+    Solo admin puede editar gastos de otros usuarios.
+    """
+    gasto = Gasto.query.get_or_404(gasto_id)
+    
+    # Verificar permisos
+    if current_user.rol != 'admin' and gasto.usuario_id != current_user.id:
+        flash('No tienes permisos para editar este gasto', 'error')
+        return redirect(url_for('lista_gastos'))
+    
+    if request.method == "POST":
+        try:
+            fecha_str = request.form.get("fecha")
+            gasto.concepto = request.form.get("concepto")
+            gasto.monto = request.form.get("monto", type=float)
+            gasto.categoria_id = request.form.get("categoria_id", type=int)
+            gasto.proveedor_id = request.form.get("proveedor_id", type=int) or None
+            gasto.metodo_pago = request.form.get("metodo_pago")
+            gasto.numero_factura = request.form.get("numero_factura", "")
+            gasto.notas = request.form.get("notas", "")
+            
+            if fecha_str:
+                gasto.fecha = datetime.strptime(fecha_str, '%Y-%m-%dT%H:%M')
+            
+            db.session.commit()
+            flash('Gasto actualizado exitosamente', 'success')
+            return redirect(url_for('lista_gastos'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error al actualizar: {str(e)}', 'error')
+    
+    categorias = CategoriaGasto.query.filter_by(activa=True).order_by(CategoriaGasto.nombre).all()
+    proveedores = Proveedor.query.filter_by(activo=True).order_by(Proveedor.nombre).all()
+    
+    return render_template("gastos/editar_gasto.html",
+                         gasto=gasto,
+                         categorias=categorias,
+                         proveedores=proveedores)
+
+
+@app.route("/gasto/eliminar/<int:gasto_id>", methods=["POST"])
+@login_required
+def eliminar_gasto(gasto_id):
+    """
+    RAZÓN: Solo admin puede eliminar gastos para mantener integridad.
+    Se elimina permanentemente (no soft delete).
+    """
+    if current_user.rol != 'admin':
+        flash('Solo administradores pueden eliminar gastos', 'error')
+        return redirect(url_for('lista_gastos'))
+    
+    gasto = Gasto.query.get_or_404(gasto_id)
+    monto = gasto.monto
+    concepto = gasto.concepto
+    
+    db.session.delete(gasto)
+    db.session.commit()
+    
+    flash(f'Gasto eliminado: {concepto} (${monto:,.2f})', 'success')
+    return redirect(url_for('lista_gastos'))
+
+# ==========================================
+# RUTAS PARA CUENTAS POR PAGAR
+# ==========================================
+
+@app.route("/cuentas_por_pagar")
+@login_required
+def cuentas_por_pagar():
+    """
+    RAZÓN: Vista principal de deudas con proveedores.
+    Muestra gastos pendientes de pago y vencidos.
+    """
+    # Obtener filtros
+    estado = request.args.get('estado', 'todos')  # todos, pendiente, vencido, pagado
+    proveedor_id = request.args.get('proveedor_id', type=int)
+    
+    # Query base - solo gastos con estado_pago
+    query = Gasto.query
+    
+    # Aplicar filtros
+    if estado != 'todos':
+        query = query.filter(Gasto.estado_pago == estado)
+    
+    if proveedor_id:
+        query = query.filter(Gasto.proveedor_id == proveedor_id)
+    
+    # Ordenar por fecha de vencimiento
+    gastos = query.order_by(Gasto.fecha_vencimiento).all()
+    
+    # Actualizar estados de gastos vencidos automáticamente
+    from datetime import date
+    hoy = date.today()
+    
+    for gasto in gastos:
+        if gasto.estado_pago == 'pendiente' and gasto.fecha_vencimiento and gasto.fecha_vencimiento < hoy:
+            gasto.estado_pago = 'vencido'
+    
+    db.session.commit()
+    
+    # Calcular totales
+    total_pendiente = sum(g.monto for g in gastos if g.estado_pago == 'pendiente')
+    total_vencido = sum(g.monto for g in gastos if g.estado_pago == 'vencido')
+    total_general = total_pendiente + total_vencido
+    
+    # Agrupar por proveedor
+    gastos_por_proveedor = {}
+    for gasto in gastos:
+        if gasto.estado_pago in ['pendiente', 'vencido']:
+            if gasto.proveedor:
+                prov_id = gasto.proveedor.id
+                if prov_id not in gastos_por_proveedor:
+                    gastos_por_proveedor[prov_id] = {
+                        'proveedor': gasto.proveedor,
+                        'total': 0,
+                        'cantidad': 0
+                    }
+                gastos_por_proveedor[prov_id]['total'] += gasto.monto
+                gastos_por_proveedor[prov_id]['cantidad'] += 1
+    
+    # Obtener proveedores para filtro
+    proveedores = Proveedor.query.filter_by(activo=True).order_by(Proveedor.nombre).all()
+    
+    return render_template("cuentas/cuentas_por_pagar.html",
+                         gastos=gastos,
+                         total_pendiente=total_pendiente,
+                         total_vencido=total_vencido,
+                         total_general=total_general,
+                         gastos_por_proveedor=gastos_por_proveedor.values(),
+                         proveedores=proveedores,
+                         estado_filtro=estado,
+                         proveedor_filtro=proveedor_id)
+
+
+@app.route("/marcar_gasto_pagado/<int:gasto_id>", methods=["POST"])
+@login_required
+def marcar_gasto_pagado(gasto_id):
+    """
+    RAZÓN: Marca un gasto como pagado cuando realmente se paga.
+    """
+    if current_user.rol not in ['admin', 'mesero']:
+        flash('No tienes permisos para esta acción', 'error')
+        return redirect(url_for('cuentas_por_pagar'))
+    
+    gasto = Gasto.query.get_or_404(gasto_id)
+    
+    gasto.estado_pago = 'pagado'
+    gasto.fecha_pago_real = datetime.now()
+    
+    db.session.commit()
+    
+    flash(f'Gasto marcado como pagado: {gasto.concepto}', 'success')
+    return redirect(request.referrer or url_for('cuentas_por_pagar'))
+
+
+@app.route("/gasto/editar_vencimiento/<int:gasto_id>", methods=["POST"])
+@login_required
+def editar_vencimiento_gasto(gasto_id):
+    """
+    RAZÓN: Permite cambiar la fecha de vencimiento de un gasto pendiente.
+    """
+    if current_user.rol != 'admin':
+        flash('Solo administradores pueden modificar vencimientos', 'error')
+        return redirect(url_for('cuentas_por_pagar'))
+    
+    gasto = Gasto.query.get_or_404(gasto_id)
+    
+    nueva_fecha = request.form.get('fecha_vencimiento')
+    if nueva_fecha:
+        gasto.fecha_vencimiento = datetime.strptime(nueva_fecha, '%Y-%m-%d').date()
+        db.session.commit()
+        flash('Fecha de vencimiento actualizada', 'success')
+    
+    return redirect(url_for('cuentas_por_pagar'))
+
+
+
+
+# ==========================================
+# RUTAS PARA PROVEEDORES
+# ==========================================
+
+@app.route("/proveedores")
+@login_required
+def lista_proveedores():
+    """RAZÓN: Gestionar base de datos de proveedores"""
+    proveedores = Proveedor.query.order_by(Proveedor.nombre).all()
+    return render_template("gastos/lista_proveedores.html", proveedores=proveedores)
+
+
+@app.route("/proveedor/nuevo", methods=["GET", "POST"])
+@login_required
+def nuevo_proveedor():
+    """RAZÓN: Agregar nuevos proveedores al sistema"""
+    if request.method == "POST":
+        proveedor = Proveedor(
+            nombre=request.form.get("nombre"),
+            nit=request.form.get("nit", ""),
+            telefono=request.form.get("telefono", ""),
+            email=request.form.get("email", ""),
+            direccion=request.form.get("direccion", ""),
+            notas=request.form.get("notas", "")
+        )
+        
+        db.session.add(proveedor)
+        db.session.commit()
+        
+        flash(f'Proveedor {proveedor.nombre} agregado', 'success')
+        return redirect(url_for('lista_proveedores'))
+    
+    return render_template("gastos/nuevo_proveedor.html")
+
+
+@app.route("/proveedor/editar/<int:proveedor_id>", methods=["GET", "POST"])
+@login_required
+def editar_proveedor(proveedor_id):
+    """RAZÓN: Actualizar información de proveedores"""
+    proveedor = Proveedor.query.get_or_404(proveedor_id)
+    
+    if request.method == "POST":
+        proveedor.nombre = request.form.get("nombre")
+        proveedor.nit = request.form.get("nit", "")
+        proveedor.telefono = request.form.get("telefono", "")
+        proveedor.email = request.form.get("email", "")
+        proveedor.direccion = request.form.get("direccion", "")
+        proveedor.notas = request.form.get("notas", "")
+        
+        db.session.commit()
+        flash('Proveedor actualizado', 'success')
+        return redirect(url_for('lista_proveedores'))
+    
+    return render_template("gastos/editar_proveedor.html", proveedor=proveedor)
+
+
+@app.route("/proveedor/toggle/<int:proveedor_id>")
+@login_required
+def toggle_proveedor(proveedor_id):
+    """RAZÓN: Activar/desactivar proveedores sin eliminarlos"""
+    if current_user.rol != 'admin':
+        flash('Solo administradores pueden modificar proveedores', 'error')
+        return redirect(url_for('lista_proveedores'))
+    
+    proveedor = Proveedor.query.get_or_404(proveedor_id)
+    proveedor.activo = not proveedor.activo
+    db.session.commit()
+    
+    estado = "activado" if proveedor.activo else "desactivado"
+    flash(f'Proveedor {proveedor.nombre} {estado}', 'success')
+    return redirect(url_for('lista_proveedores'))
+
+
+# ==========================================
+# REPORTES FINANCIEROS
+# ==========================================
+
+@app.route("/reportes/financiero")
+@login_required
+def reporte_financiero():
+    """
+    RAZÓN: Vista consolidada de ingresos vs gastos.
+    El reporte más importante para tomar decisiones.
+    """
+    # Obtener rango de fechas (por defecto, mes actual)
+    fecha_inicio = request.args.get('fecha_inicio')
+    fecha_fin = request.args.get('fecha_fin')
+    
+    if not fecha_inicio:
+        # Primer día del mes actual
+        hoy = datetime.now()
+        fecha_inicio = hoy.replace(day=1).strftime('%Y-%m-%d')
+    
+    if not fecha_fin:
+        # Hoy
+        fecha_fin = datetime.now().strftime('%Y-%m-%d')
+    
+    # Convertir a objetos datetime
+    fecha_inicio_obj = datetime.strptime(fecha_inicio, '%Y-%m-%d')
+    fecha_fin_obj = datetime.strptime(fecha_fin, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+    
+    # INGRESOS: Sumar facturas del período
+    ingresos = db.session.query(
+        db.func.sum(Factura.total)
+    ).filter(
+        Factura.fecha_emision >= fecha_inicio_obj,
+        Factura.fecha_emision <= fecha_fin_obj
+    ).scalar() or 0
+    
+    # GASTOS: Sumar gastos del período
+    gastos_total = db.session.query(
+        db.func.sum(Gasto.monto)
+    ).filter(
+        Gasto.fecha >= fecha_inicio_obj,
+        Gasto.fecha <= fecha_fin_obj
+    ).scalar() or 0
+    
+    # UTILIDAD = INGRESOS - GASTOS
+    utilidad = ingresos - gastos_total
+    margen = (utilidad / ingresos * 100) if ingresos > 0 else 0
+    
+    # Gastos por categoría - CONVERTIR A LISTA DE TUPLAS
+    gastos_por_categoria_raw = db.session.query(
+        CategoriaGasto.nombre,
+        CategoriaGasto.color,
+        db.func.sum(Gasto.monto).label('total'),
+        db.func.count(Gasto.id).label('cantidad')
+    ).join(Gasto).filter(
+        Gasto.fecha >= fecha_inicio_obj,
+        Gasto.fecha <= fecha_fin_obj
+    ).group_by(CategoriaGasto.id).order_by(db.desc('total')).all()
+    
+    # SOLUCIÓN: Convertir Row objects a lista de listas para JSON
+    gastos_por_categoria = []
+    gastos_por_categoria_tabla = []
+    
+    for row in gastos_por_categoria_raw:
+        # Para el gráfico (formato JSON)
+        gastos_por_categoria.append([
+            row[0],  # nombre
+            row[1],  # color
+            float(row[2])  # total
+        ])
+        
+        # Para la tabla HTML (objeto completo)
+        gastos_por_categoria_tabla.append({
+            'nombre': row[0],
+            'color': row[1],
+            'total': float(row[2]),
+            'cantidad': row[3]
+        })
+    
+    # Evolución diaria de ingresos y gastos (para gráfico)
+    from datetime import timedelta
+    dias_rango = (fecha_fin_obj - fecha_inicio_obj).days + 1
+    evolucion_diaria = []
+    
+    for i in range(dias_rango):
+        dia = fecha_inicio_obj + timedelta(days=i)
+        dia_siguiente = dia + timedelta(days=1)
+        
+        ingresos_dia = db.session.query(
+            db.func.sum(Factura.total)
+        ).filter(
+            Factura.fecha_emision >= dia,
+            Factura.fecha_emision < dia_siguiente
+        ).scalar() or 0
+        
+        gastos_dia = db.session.query(
+            db.func.sum(Gasto.monto)
+        ).filter(
+            Gasto.fecha >= dia,
+            Gasto.fecha < dia_siguiente
+        ).scalar() or 0
+        
+        evolucion_diaria.append({
+            'fecha': dia.strftime('%Y-%m-%d'),
+            'ingresos': float(ingresos_dia),
+            'gastos': float(gastos_dia),
+            'utilidad': float(ingresos_dia - gastos_dia)
+        })
+    
+    return render_template("reportes/financiero.html",
+                         fecha_inicio=fecha_inicio,
+                         fecha_fin=fecha_fin,
+                         ingresos=float(ingresos),
+                         gastos_total=float(gastos_total),
+                         utilidad=float(utilidad),
+                         margen=float(margen),
+                         gastos_por_categoria=gastos_por_categoria,  # Para JSON/gráficos
+                         gastos_por_categoria_tabla=gastos_por_categoria_tabla,  # Para tabla HTML
+                         evolucion_diaria=evolucion_diaria,
+                         now=datetime.now())
 # =========================
 # INICIALIZACIÓN
 # =========================
@@ -947,6 +1783,238 @@ def init_db():
         
         db.session.commit()
         print("Base de datos inicializada correctamente")
+
+        if CategoriaGasto.query.count() == 0:
+            categorias_default = [
+                {'nombre': 'Ingredientes y Materia Prima', 'descripcion': 'Compras de alimentos, bebidas y suministros de cocina', 'color': '#28a745'},
+                {'nombre': 'Salarios y Nómina', 'descripcion': 'Pagos a empleados, prestaciones y seguridad social', 'color': '#007bff'},
+                {'nombre': 'Servicios Públicos', 'descripcion': 'Agua, luz, gas, internet, teléfono', 'color': '#ffc107'},
+                {'nombre': 'Arriendo', 'descripcion': 'Pago de arriendo del local', 'color': '#dc3545'},
+                {'nombre': 'Mantenimiento', 'descripcion': 'Reparaciones, limpieza, mantenimiento de equipos', 'color': '#6c757d'},
+                {'nombre': 'Marketing', 'descripcion': 'Publicidad, redes sociales, volantes', 'color': '#e83e8c'},
+                {'nombre': 'Impuestos', 'descripcion': 'Impuestos, declaraciones, trámites legales', 'color': '#fd7e14'},
+                {'nombre': 'Otros Gastos', 'descripcion': 'Gastos misceláneos', 'color': '#6610f2'}
+            ]
+            
+            for cat_data in categorias_default:
+                categoria = CategoriaGasto(**cat_data)
+                db.session.add(categoria)
+        
+        db.session.commit()
+        print("Categorías de gastos inicializadas correctamente")
+
+# ==========================================
+# RUTAS PARA PRESUPUESTOS
+# ==========================================
+
+@app.route("/presupuestos")
+@login_required
+def lista_presupuestos():
+    """
+    RAZÓN: Vista principal de presupuestos por categoría.
+    Muestra límites de gasto y alertas.
+    """
+    if current_user.rol != 'admin':
+        flash('Solo administradores pueden ver presupuestos', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # Obtener mes y año actual
+    from datetime import datetime
+    mes_actual = datetime.now().month
+    anio_actual = datetime.now().year
+    
+    # Obtener presupuestos del mes actual
+    presupuestos = Presupuesto.query.filter_by(
+        mes=mes_actual,
+        anio=anio_actual,
+        activo=True
+    ).all()
+    
+    # Si no hay presupuestos para este mes, obtener todos los activos
+    if not presupuestos:
+        presupuestos = Presupuesto.query.filter_by(activo=True).all()
+    
+    # Calcular totales
+    total_presupuestado = sum(p.monto_limite for p in presupuestos)
+    total_gastado = sum(p.gasto_actual for p in presupuestos)
+    total_disponible = total_presupuestado - total_gastado
+    
+    # Contar alertas
+    alertas = sum(1 for p in presupuestos if p.estado in ['alerta', 'excedido'])
+    excedidos = sum(1 for p in presupuestos if p.estado == 'excedido')
+    
+    return render_template("presupuestos/lista_presupuestos.html",
+                         presupuestos=presupuestos,
+                         total_presupuestado=total_presupuestado,
+                         total_gastado=total_gastado,
+                         total_disponible=total_disponible,
+                         alertas=alertas,
+                         excedidos=excedidos,
+                         mes_actual=mes_actual,
+                         anio_actual=anio_actual)
+
+
+@app.route("/presupuesto/nuevo", methods=["GET", "POST"])
+@login_required
+def nuevo_presupuesto():
+    """
+    RAZÓN: Crear un nuevo presupuesto para una categoría.
+    """
+    if current_user.rol != 'admin':
+        flash('Solo administradores pueden crear presupuestos', 'error')
+        return redirect(url_for('dashboard'))
+    
+    if request.method == "POST":
+        categoria_id = request.form.get("categoria_id", type=int)
+        monto_limite = request.form.get("monto_limite", type=float)
+        periodo = request.form.get("periodo", "mensual")
+        mes = request.form.get("mes", type=int)
+        anio = request.form.get("anio", type=int)
+        alerta_porcentaje = request.form.get("alerta_porcentaje", 80, type=int)
+        
+        # Verificar si ya existe un presupuesto para esta categoría/mes/año
+        existe = Presupuesto.query.filter_by(
+            categoria_id=categoria_id,
+            mes=mes,
+            anio=anio,
+            activo=True
+        ).first()
+        
+        if existe:
+            flash('Ya existe un presupuesto activo para esta categoría en ese período', 'error')
+            return redirect(url_for('nuevo_presupuesto'))
+        
+        presupuesto = Presupuesto(
+            categoria_id=categoria_id,
+            monto_limite=monto_limite,
+            periodo=periodo,
+            mes=mes,
+            anio=anio,
+            alerta_porcentaje=alerta_porcentaje
+        )
+        
+        db.session.add(presupuesto)
+        db.session.commit()
+        
+        flash('Presupuesto creado exitosamente', 'success')
+        return redirect(url_for('lista_presupuestos'))
+    
+    # GET
+    categorias = CategoriaGasto.query.filter_by(activa=True).order_by(CategoriaGasto.nombre).all()
+    
+    from datetime import datetime
+    mes_actual = datetime.now().month
+    anio_actual = datetime.now().year
+    
+    return render_template("presupuestos/nuevo_presupuesto.html",
+                         categorias=categorias,
+                         mes_actual=mes_actual,
+                         anio_actual=anio_actual)
+
+
+@app.route("/presupuesto/editar/<int:presupuesto_id>", methods=["GET", "POST"])
+@login_required
+def editar_presupuesto(presupuesto_id):
+    """
+    RAZÓN: Modificar un presupuesto existente.
+    """
+    if current_user.rol != 'admin':
+        flash('Solo administradores pueden editar presupuestos', 'error')
+        return redirect(url_for('dashboard'))
+    
+    presupuesto = Presupuesto.query.get_or_404(presupuesto_id)
+    
+    if request.method == "POST":
+        presupuesto.monto_limite = request.form.get("monto_limite", type=float)
+        presupuesto.alerta_porcentaje = request.form.get("alerta_porcentaje", type=int)
+        
+        db.session.commit()
+        flash('Presupuesto actualizado', 'success')
+        return redirect(url_for('lista_presupuestos'))
+    
+    return render_template("presupuestos/editar_presupuesto.html",
+                         presupuesto=presupuesto)
+
+
+@app.route("/presupuesto/desactivar/<int:presupuesto_id>")
+@login_required
+def desactivar_presupuesto(presupuesto_id):
+    """
+    RAZÓN: Desactivar un presupuesto sin eliminarlo.
+    """
+    if current_user.rol != 'admin':
+        flash('Solo administradores pueden desactivar presupuestos', 'error')
+        return redirect(url_for('dashboard'))
+    
+    presupuesto = Presupuesto.query.get_or_404(presupuesto_id)
+    presupuesto.activo = False
+    
+    db.session.commit()
+    flash('Presupuesto desactivado', 'success')
+    return redirect(url_for('lista_presupuestos'))
+
+
+@app.route("/presupuesto/copiar_mes_siguiente", methods=["POST"])
+@login_required
+def copiar_presupuestos_mes_siguiente():
+    """
+    RAZÓN: Copia todos los presupuestos del mes actual al mes siguiente.
+    Útil para no tener que recrearlos cada mes.
+    """
+    if current_user.rol != 'admin':
+        flash('Solo administradores pueden copiar presupuestos', 'error')
+        return redirect(url_for('dashboard'))
+    
+    from datetime import datetime
+    from dateutil.relativedelta import relativedelta
+    
+    mes_actual = datetime.now().month
+    anio_actual = datetime.now().year
+    
+    # Calcular mes siguiente
+    fecha_siguiente = datetime.now() + relativedelta(months=1)
+    mes_siguiente = fecha_siguiente.month
+    anio_siguiente = fecha_siguiente.year
+    
+    # Obtener presupuestos del mes actual
+    presupuestos_actuales = Presupuesto.query.filter_by(
+        mes=mes_actual,
+        anio=anio_actual,
+        activo=True
+    ).all()
+    
+    if not presupuestos_actuales:
+        flash('No hay presupuestos activos en el mes actual para copiar', 'error')
+        return redirect(url_for('lista_presupuestos'))
+    
+    # Verificar si ya existen presupuestos para el mes siguiente
+    existe = Presupuesto.query.filter_by(
+        mes=mes_siguiente,
+        anio=anio_siguiente,
+        activo=True
+    ).first()
+    
+    if existe:
+        flash(f'Ya existen presupuestos para {mes_siguiente}/{anio_siguiente}', 'error')
+        return redirect(url_for('lista_presupuestos'))
+    
+    # Copiar presupuestos
+    copiados = 0
+    for p in presupuestos_actuales:
+        nuevo = Presupuesto(
+            categoria_id=p.categoria_id,
+            monto_limite=p.monto_limite,
+            periodo=p.periodo,
+            mes=mes_siguiente,
+            anio=anio_siguiente,
+            alerta_porcentaje=p.alerta_porcentaje
+        )
+        db.session.add(nuevo)
+        copiados += 1
+    
+    db.session.commit()
+    flash(f'{copiados} presupuesto(s) copiados a {mes_siguiente}/{anio_siguiente}', 'success')
+    return redirect(url_for('lista_presupuestos'))
 
 # =========================
 # EJECUCIÓN
