@@ -1452,10 +1452,10 @@ def cuentas_por_pagar():
     Muestra gastos pendientes de pago y vencidos.
     """
     # Obtener filtros
-    estado = request.args.get('estado', 'todos')  # todos, pendiente, vencido, pagado
+    estado = request.args.get('estado', 'todos')
     proveedor_id = request.args.get('proveedor_id', type=int)
     
-    # Query base - solo gastos con estado_pago
+    # Query base
     query = Gasto.query
     
     # Aplicar filtros
@@ -1501,6 +1501,9 @@ def cuentas_por_pagar():
     # Obtener proveedores para filtro
     proveedores = Proveedor.query.filter_by(activo=True).order_by(Proveedor.nombre).all()
     
+    # ============================================
+    # SOLUCIÓN: AGREGAR datetime AL RETURN
+    # ============================================
     return render_template("cuentas/cuentas_por_pagar.html",
                          gastos=gastos,
                          total_pendiente=total_pendiente,
@@ -1509,7 +1512,8 @@ def cuentas_por_pagar():
                          gastos_por_proveedor=gastos_por_proveedor.values(),
                          proveedores=proveedores,
                          estado_filtro=estado,
-                         proveedor_filtro=proveedor_id)
+                         proveedor_filtro=proveedor_id,
+                         datetime=datetime)  # ← AGREGAR ESTA LÍNEA
 
 
 @app.route("/marcar_gasto_pagado/<int:gasto_id>", methods=["POST"])
