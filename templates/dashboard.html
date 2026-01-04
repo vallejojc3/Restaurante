@@ -546,9 +546,9 @@
         <!-- SECCIÓN: Accesos Rápidos para ADMINISTRADORES -->
         {% if current_user.rol == 'admin' %}
         
-        <!-- NUEVO: Control Financiero -->
+        <!-- Control Financiero -->
         <div class="quick-access-section">
-            <h2 class="section-title">💰 Control Financiero (NUEVO)</h2>
+            <h2 class="section-title">💰 Control Financiero</h2>
             <div class="quick-access-grid">
                 <a href="{{ url_for('cuentas_por_pagar') }}" class="quick-access-card qa-danger">
                     <div class="quick-access-icon">💳</div>
