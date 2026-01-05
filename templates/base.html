@@ -41,6 +41,10 @@
         {% block content %}{% endblock %}
     </div>
 
+    <script>
+        // Exponer rol del usuario para que el JS active las notificaciones solo para meseros
+        window.currentUserRole = "{{ current_user.rol if current_user.is_authenticated else '' }}";
+    </script>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

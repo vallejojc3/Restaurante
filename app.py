@@ -82,6 +82,8 @@ class Pedido(db.Model):
     notas = db.Column(db.Text)
     estado = db.Column(db.String(20), default='pendiente')  # pendiente, preparando, listo, entregado
     pagado = db.Column(db.Boolean, default=False)
+    # Timestamp cuando se actualizó el estado por última vez
+    estado_actualizado = db.Column(db.DateTime, default=datetime.now)
     
     mesa = db.relationship('Mesa', backref='pedidos')
     mesero = db.relationship('Usuario', backref='pedidos')
@@ -844,8 +846,17 @@ def actualizar_estado(pedido_id, estado):
     
     if estado in estados_validos:
         pedido.estado = estado
+        try:
+            pedido.estado_actualizado = datetime.now()
+        except Exception:
+            # En caso de que la columna no exista en DB todavía
+            pass
         db.session.commit()
         flash(f'Estado actualizado a: {estado}', 'success')
+        # Si se marcó como 'listo' y quien lo marcó NO es mesero, creamos una notificación para meseros
+        if estado == 'listo' and getattr(current_user, 'rol', None) != 'mesero':
+            # No necesitamos guardar una entidad de notificación; el JS de meseros hará polling por pedidos 'listo' recientes
+            pass
     
     return redirect(request.referrer or url_for('dashboard'))
 
@@ -857,6 +868,38 @@ def marcar_pagado(pedido_id):
     db.session.commit()
     flash('Pedido marcado como pagado', 'success')
     return redirect(request.referrer or url_for('dashboard'))
+
+
+@app.route('/notificaciones/pendientes')
+@login_required
+def notificaciones_pendientes():
+    """Endpoint que devuelve pedidos marcados como 'listo' desde un timestamp 'since'.
+    Parámetros: since (ISO 8601 string). Solo accesible a usuarios con rol 'mesero'."""
+    if getattr(current_user, 'rol', None) != 'mesero':
+        return jsonify([])
+
+    since = request.args.get('since')
+    try:
+        since_dt = datetime.fromisoformat(since) if since else (datetime.now() - timedelta(seconds=10))
+    except Exception:
+        since_dt = datetime.now() - timedelta(seconds=10)
+
+    pedidos = Pedido.query.filter(
+        Pedido.estado == 'listo',
+        Pedido.estado_actualizado > since_dt
+    ).order_by(Pedido.estado_actualizado.asc()).all()
+
+    data = []
+    for p in pedidos:
+        data.append({
+            'id': p.id,
+            'mesa': p.mesa.numero if p.mesa else None,
+            'producto': p.producto,
+            'cantidad': p.cantidad,
+            'estado_actualizado': p.estado_actualizado.isoformat() if p.estado_actualizado else None
+        })
+
+    return jsonify(data)
 
 @app.route("/pagar_mesa/<int:mesa_id>")
 @login_required

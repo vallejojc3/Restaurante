@@ -23,6 +23,17 @@ def update_database():
                 print("✓ Columna agregada exitosamente")
             else:
                 print("✓ La columna precio_unitario ya existe")
+
+            # Agregar columna estado_actualizado para notificaciones (si no existe)
+            if 'estado_actualizado' not in columns:
+                print("Agregando columna estado_actualizado...")
+                cursor.execute("ALTER TABLE pedido ADD COLUMN estado_actualizado DATETIME")
+                # Inicializar valores para pedidos existentes (usar fecha de creación como proxy)
+                cursor.execute("UPDATE pedido SET estado_actualizado = fecha WHERE estado = 'listo' AND estado_actualizado IS NULL")
+                conn.commit()
+                print("✓ Columna 'estado_actualizado' agregada exitosamente")
+            else:
+                print("✓ La columna 'estado_actualizado' ya existe")
             
             conn.close()
             print("\n¡Base de datos actualizada correctamente!")
