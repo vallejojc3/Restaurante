@@ -1,12 +1,15 @@
-from flask import Flask, render_template, redirect, url_for, request, flash, session
+from flask import Flask, render_template, redirect, url_for, request, flash, session, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timedelta,date
+from datetime import datetime, timedelta, date
 import os
-from flask import jsonify, make_response
 import json
-from datetime import datetime
+from dotenv import load_dotenv
+
+# Cargar .env en desarrollo si existe
+if os.path.exists('.env'):
+    load_dotenv('.env')
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'clave-desarrollo-temporal-cambiar-en-produccion')
@@ -16,8 +19,17 @@ app.secret_key = os.environ.get('SECRET_KEY', 'clave-desarrollo-temporal-cambiar
 # =========================
 
 basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'restaurante.db')
+# Preferir DATABASE_URL (Railway / Heroku). Si viene con `postgres://`, reemplazar por `postgresql://` para SQLAlchemy.
+database_url = os.environ.get('DATABASE_URL')
+if database_url:
+    database_url = database_url.replace('postgres://', 'postgresql://')
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'restaurante.db')
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Opciones para evitar errores de conexión en entornos PaaS
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True} 
 
 db = SQLAlchemy(app)
 login_manager = LoginManager()
@@ -56,7 +68,7 @@ class Sesion(db.Model):
     activa = db.Column(db.Boolean, default=True)
     
     mesa = db.relationship('Mesa', backref='sesiones')
-    pedidos = db.relationship('Pedido', backref='sesion', lazy=True)
+    pedidos = db.relationship('Pedido', backref='sesion', lazy='select')
 
 class Pedido(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -85,7 +97,7 @@ class CategoriaMenu(db.Model):
     orden = db.Column(db.Integer, default=0)
     activa = db.Column(db.Boolean, default=True)
     
-    items = db.relationship('ItemMenu', backref='categoria', lazy=True, cascade='all, delete-orphan')
+    items = db.relationship('ItemMenu', backref='categoria', lazy='select', cascade='all, delete-orphan')
 
 class ItemMenu(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -222,7 +234,7 @@ class CategoriaGasto(db.Model):
     activa = db.Column(db.Boolean, default=True)
     
     # Relación: Una categoría puede tener muchos gastos
-    gastos = db.relationship('Gasto', backref='categoria', lazy=True)
+    gastos = db.relationship('Gasto', backref='categoria', lazy='select')
 
 
 class Proveedor(db.Model):
@@ -243,7 +255,7 @@ class Proveedor(db.Model):
     fecha_registro = db.Column(db.DateTime, default=datetime.now)
     
     # Relación: Un proveedor puede tener muchos gastos
-    gastos = db.relationship('Gasto', backref='proveedor', lazy=True)
+    gastos = db.relationship('Gasto', backref='proveedor', lazy='select')
 
 
 class Gasto(db.Model):
@@ -323,11 +335,11 @@ def facturar_sesion(sesion_id):
                 "transferencia": request.form.get("transferencia", 0, type=float)
             }
         
-        # Calcular totales
-        subtotal = sum(p.cantidad * p.precio_unitario for p in sesion.pedidos)
+        # Calcular totales (usar agregación en DB para eficiencia)
+        subtotal = db.session.query(db.func.coalesce(db.func.sum(Pedido.cantidad * Pedido.precio_unitario), 0)).filter(Pedido.sesion_id == sesion.id).scalar() or 0
         iva = 0  # Sin IVA
         total = subtotal + propina
-        
+
         # Generar número consecutivo
         ultima_factura = Factura.query.order_by(Factura.id.desc()).first()
         if ultima_factura:
@@ -341,8 +353,7 @@ def facturar_sesion(sesion_id):
         # Convertir fecha de vencimiento
         fecha_vencimiento = None
         if fecha_vencimiento_str and estado_pago == 'pendiente':
-            from datetime import datetime as dt  # IMPORTANTE
-            fecha_vencimiento = dt.strptime(fecha_vencimiento_str, '%Y-%m-%d').date()
+            fecha_vencimiento = datetime.strptime(fecha_vencimiento_str, '%Y-%m-%d').date()
         
         # Fecha de pago real
         fecha_pago_real = datetime.now() if estado_pago == 'pagada' else None
@@ -374,10 +385,8 @@ def facturar_sesion(sesion_id):
         sesion.activa = False
         sesion.fecha_fin = datetime.now()
         
-        # Marcar todos los pedidos como pagados
-        for pedido in sesion.pedidos:
-            pedido.pagado = True
-            pedido.estado = 'entregado'
+        # Marcar todos los pedidos como pagados (actualización en bloque)
+        db.session.query(Pedido).filter(Pedido.sesion_id == sesion.id).update({"pagado": True, "estado": "entregado"}, synchronize_session=False)
         
         db.session.add(factura)
         db.session.commit()
@@ -385,8 +394,8 @@ def facturar_sesion(sesion_id):
         flash(f'Factura {numero_consecutivo} generada exitosamente', 'success')
         return redirect(url_for('ver_factura', factura_id=factura.id))
     
-    # GET: Calcular totales para mostrar en el formulario
-    subtotal = sum(p.cantidad * p.precio_unitario for p in sesion.pedidos)
+    # GET: Calcular totales para mostrar en el formulario (usar agregación en DB)
+    subtotal = db.session.query(db.func.coalesce(db.func.sum(Pedido.cantidad * Pedido.precio_unitario), 0)).filter(Pedido.sesion_id == sesion.id).scalar() or 0
     iva = 0  # Sin IVA
     
     # ============================================
@@ -1275,17 +1284,17 @@ def lista_gastos():
     # Aplicar filtros
     if fecha_inicio:
         try:
-            fecha_inicio_obj = datetime.strptime(fecha_inicio, '%Y-%m-%d')
+            # Empezamos el día a las 03:00 (cierre a partir de las 03:00)
+            fecha_inicio_obj = datetime.strptime(fecha_inicio, '%Y-%m-%d').replace(hour=3, minute=0, second=0)
             query = query.filter(Gasto.fecha >= fecha_inicio_obj)
         except ValueError:
             flash('Fecha de inicio inválida', 'error')
     
     if fecha_fin:
         try:
-            fecha_fin_obj = datetime.strptime(fecha_fin, '%Y-%m-%d')
-            # Agregar 1 día para incluir todo el día final
-            fecha_fin_obj = fecha_fin_obj.replace(hour=23, minute=59, second=59)
-            query = query.filter(Gasto.fecha <= fecha_fin_obj)
+            # La fecha de fin será el inicio del día siguiente a las 03:00 (end-exclusive)
+            fecha_fin_obj = datetime.strptime(fecha_fin, '%Y-%m-%d').replace(hour=3, minute=0, second=0) + timedelta(days=1)
+            query = query.filter(Gasto.fecha < fecha_fin_obj)
         except ValueError:
             flash('Fecha de fin inválida', 'error')
     
@@ -1722,23 +1731,25 @@ def reporte_financiero():
         fecha_fin = datetime.now().strftime('%Y-%m-%d')
     
     # Convertir a objetos datetime
-    fecha_inicio_obj = datetime.strptime(fecha_inicio, '%Y-%m-%d')
-    fecha_fin_obj = datetime.strptime(fecha_fin, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
-    
-    # INGRESOS: Sumar facturas del período
+    # IMPORTANTE: Definimos el inicio del día a las 03:00 (cierre a partir de las 03:00)
+    fecha_inicio_obj = datetime.strptime(fecha_inicio, '%Y-%m-%d').replace(hour=3, minute=0, second=0)
+    # Fecha fin es el inicio del día siguiente a las 03:00 (end-exclusive)
+    fecha_fin_obj = datetime.strptime(fecha_fin, '%Y-%m-%d').replace(hour=3, minute=0, second=0) + timedelta(days=1)
+
+    # INGRESOS: Sumar facturas del período (end-exclusive: >= inicio, < fin)
     ingresos = db.session.query(
         db.func.sum(Factura.total)
     ).filter(
         Factura.fecha_emision >= fecha_inicio_obj,
-        Factura.fecha_emision <= fecha_fin_obj
+        Factura.fecha_emision < fecha_fin_obj
     ).scalar() or 0
     
-    # GASTOS: Sumar gastos del período
+    # GASTOS: Sumar gastos del período (end-exclusive)
     gastos_total = db.session.query(
         db.func.sum(Gasto.monto)
     ).filter(
         Gasto.fecha >= fecha_inicio_obj,
-        Gasto.fecha <= fecha_fin_obj
+        Gasto.fecha < fecha_fin_obj
     ).scalar() or 0
     
     # UTILIDAD = INGRESOS - GASTOS
@@ -1753,7 +1764,7 @@ def reporte_financiero():
         db.func.count(Gasto.id).label('cantidad')
     ).join(Gasto).filter(
         Gasto.fecha >= fecha_inicio_obj,
-        Gasto.fecha <= fecha_fin_obj
+        Gasto.fecha < fecha_fin_obj
     ).group_by(CategoriaGasto.id).order_by(db.desc('total')).all()
     
     # SOLUCIÓN: Convertir Row objects a lista de listas para JSON
@@ -1777,30 +1788,30 @@ def reporte_financiero():
         })
     
     # Evolución diaria de ingresos y gastos (para gráfico)
-    from datetime import timedelta
-    dias_rango = (fecha_fin_obj - fecha_inicio_obj).days + 1
+    # Cada "día" va desde 03:00 del día hasta 03:00 del día siguiente
+    dias_rango = (fecha_fin_obj - fecha_inicio_obj).days
     evolucion_diaria = []
     
     for i in range(dias_rango):
-        dia = fecha_inicio_obj + timedelta(days=i)
-        dia_siguiente = dia + timedelta(days=1)
+        dia_inicio = fecha_inicio_obj + timedelta(days=i)
+        dia_fin = dia_inicio + timedelta(days=1)
         
         ingresos_dia = db.session.query(
             db.func.sum(Factura.total)
         ).filter(
-            Factura.fecha_emision >= dia,
-            Factura.fecha_emision < dia_siguiente
+            Factura.fecha_emision >= dia_inicio,
+            Factura.fecha_emision < dia_fin
         ).scalar() or 0
         
         gastos_dia = db.session.query(
             db.func.sum(Gasto.monto)
         ).filter(
-            Gasto.fecha >= dia,
-            Gasto.fecha < dia_siguiente
+            Gasto.fecha >= dia_inicio,
+            Gasto.fecha < dia_fin
         ).scalar() or 0
         
         evolucion_diaria.append({
-            'fecha': dia.strftime('%Y-%m-%d'),
+            'fecha': dia_inicio.strftime('%Y-%m-%d'),
             'ingresos': float(ingresos_dia),
             'gastos': float(gastos_dia),
             'utilidad': float(ingresos_dia - gastos_dia)
@@ -2090,4 +2101,3 @@ def copiar_presupuestos_mes_siguiente():
 
 if __name__ == "__main__":
     init_db()
-    app.run(debug=True)
