@@ -5,6 +5,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, date
 import os
 import json
+from sqlalchemy.exc import OperationalError
 from dotenv import load_dotenv
 
 # Cargar .env en desarrollo si existe
@@ -293,6 +294,22 @@ class Gasto(db.Model):
     usuario = db.relationship('Usuario', foreign_keys=[usuario_id], backref='gastos_registrados')
     aprobado_por = db.relationship('Usuario', foreign_keys=[aprobado_por_id], backref='gastos_aprobados')
 
+
+# =========================
+# Consumo Interno (solo para administración)
+# =========================
+class ConsumoInterno(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    item_id = db.Column(db.Integer, db.ForeignKey('item_menu.id'), nullable=False)
+    cantidad = db.Column(db.Integer, default=1)
+    costo = db.Column(db.Float, default=0.0)  # Costo para el dueño por unidad
+    fecha = db.Column(db.DateTime, default=datetime.now)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    notas = db.Column(db.Text)
+
+    item = db.relationship('ItemMenu', backref='consumos_internos', lazy='joined')
+    usuario = db.relationship('Usuario', backref='consumos_registrados')
+
 # =========================
 # RUTAS
 # =========================
@@ -447,6 +464,113 @@ def lista_facturas():
         facturas = Factura.query.order_by(Factura.fecha_emision.desc()).limit(50).all()
     
     return render_template("lista_facturas.html", facturas=facturas)
+
+# ==========================================
+# RUTAS PARA CONSUMO INTERNO (ADMIN)
+# ==========================================
+@app.route('/consumo_interno')
+@login_required
+def lista_consumos_internos():
+    if getattr(current_user, 'rol', None) != 'admin':
+        flash('No tienes permisos para ver consumos internos', 'error')
+        return redirect(url_for('dashboard'))
+
+    fecha = request.args.get('fecha')
+    fecha_inicio = request.args.get('fecha_inicio')
+    fecha_fin = request.args.get('fecha_fin')
+
+    query = ConsumoInterno.query
+
+    # Si se especifica `fecha`, interpretamos el día como [fecha 03:00, fecha+1 03:00)
+    if fecha:
+        try:
+            d = datetime.strptime(fecha, '%Y-%m-%d').date()
+            start = datetime(d.year, d.month, d.day, 3, 0, 0)
+            end = start + timedelta(days=1)
+            query = query.filter(ConsumoInterno.fecha >= start, ConsumoInterno.fecha < end)
+        except ValueError:
+            flash('Fecha inválida', 'error')
+    else:
+        # Si se usa rango, aplicamos cierre diario a las 03:00: fecha_inicio comienza a las 03:00; fecha_fin termina el día siguiente a las 03:00 (exclusivo)
+        if fecha_inicio:
+            try:
+                fi_date = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+                start = datetime(fi_date.year, fi_date.month, fi_date.day, 3, 0, 0)
+                query = query.filter(ConsumoInterno.fecha >= start)
+            except ValueError:
+                flash('Fecha inicio inválida', 'error')
+        if fecha_fin:
+            try:
+                ff_date = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
+                end = datetime(ff_date.year, ff_date.month, ff_date.day, 3, 0, 0) + timedelta(days=1)
+                query = query.filter(ConsumoInterno.fecha < end)
+            except ValueError:
+                flash('Fecha fin inválida', 'error')
+
+    try:
+        consumos = query.order_by(ConsumoInterno.fecha.desc()).limit(200).all()
+        total_costo = sum(c.costo * c.cantidad for c in consumos)
+    except OperationalError:
+        # Tabla aún no creada; instrucciones para el desarrollador
+        flash("La tabla 'consumo_interno' no existe. Ejecuta `python update_database.py` para crearla.", 'error')
+        return redirect(url_for('dashboard'))
+
+    return render_template('consumo_interno/lista_consumos.html', consumos=consumos, total_costo=total_costo)
+
+
+@app.route('/consumo_interno/nuevo', methods=['GET', 'POST'])
+@login_required
+def nuevo_consumo_interno():
+    if getattr(current_user, 'rol', None) != 'admin':
+        flash('No tienes permisos para crear consumos internos', 'error')
+        return redirect(url_for('dashboard'))
+
+    items = ItemMenu.query.order_by(ItemMenu.nombre).all()
+    users = Usuario.query.order_by(Usuario.nombre).all()
+
+    if request.method == 'POST':
+        item_id = request.form.get('item_id', type=int)
+        usuario_id = request.form.get('usuario_id', type=int)
+        cantidad = request.form.get('cantidad', 1, type=int)
+        costo = request.form.get('costo', 0.0, type=float)
+        notas = request.form.get('notas')
+
+        if not item_id or not usuario_id or cantidad <= 0:
+            flash('Item, usuario o cantidad inválida', 'error')
+            return redirect(url_for('nuevo_consumo_interno'))
+
+        # Verificar que el usuario seleccionado exista
+        usuario = Usuario.query.get(usuario_id)
+        if not usuario:
+            flash('Usuario seleccionado no existe', 'error')
+            return redirect(url_for('nuevo_consumo_interno'))
+
+        consumo = ConsumoInterno(item_id=item_id, cantidad=cantidad, costo=costo, usuario_id=usuario_id, notas=notas)
+        db.session.add(consumo)
+        db.session.commit()
+        flash('Consumo interno registrado', 'success')
+        return redirect(url_for('lista_consumos_internos'))
+
+    return render_template('consumo_interno/nuevo_consumo.html', items=items, users=users) 
+
+
+@app.route('/consumo_interno/<int:consumo_id>/eliminar', methods=['POST'])
+@login_required
+def eliminar_consumo_interno(consumo_id):
+    if getattr(current_user, 'rol', None) != 'admin':
+        flash('No tienes permisos para eliminar consumos internos', 'error')
+        return redirect(url_for('dashboard'))
+
+    consumo = ConsumoInterno.query.get_or_404(consumo_id)
+    try:
+        db.session.delete(consumo)
+        db.session.commit()
+        flash('Consumo interno eliminado', 'success')
+    except Exception:
+        db.session.rollback()
+        flash('Error al eliminar consumo interno', 'error')
+
+    return redirect(url_for('lista_consumos_internos'))
 
 
 @app.route('/factura/<int:factura_id>/editar', methods=['GET', 'POST'])

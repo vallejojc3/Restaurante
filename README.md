@@ -32,4 +32,12 @@ Instrucciones rápidas para desplegar en Railway ✅
      - Instalar PostgreSQL localmente y asegurarte de que `pg_config` esté en el PATH.
      - En producción en Railway no suele ser un problema porque se usan wheels compatibles.
 
-¡Listo! Si quieres, añado un `release` command o un script que aplique automáticamente migraciones/creación de DB al desplegar. 🎯
+8. Consumo Interno (administración)
+   - He añadido una sección para registrar "Consumo Interno" (solo para administradores): `Consumo Interno` permite registrar qué ítems del menú se retiran para uso interno y cuánto le cuesta al dueño (costo por unidad). Esta acción **no** afecta gastos ni ingresos automáticamente, es solo un registro para control interno.
+   - Rutas:
+     - `GET /consumo_interno` — lista de consumos (solo admin)
+     - `GET/POST /consumo_interno/nuevo` — registrar nuevo consumo (solo admin)
+     - `POST /consumo_interno/<id>/eliminar` — eliminar registro (solo admin)
+   - Para crear la tabla en la BD local puedes ejecutar: `python update_database.py` (o `python create_db.py` en caso de base vacía).
+
+¡Listo! Si quieres, añado export CSV o filtros por periodo para los consumos.

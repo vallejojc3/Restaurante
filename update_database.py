@@ -34,6 +34,12 @@ def update_database():
                 print("✓ Columna 'estado_actualizado' agregada exitosamente")
             else:
                 print("✓ La columna 'estado_actualizado' ya existe")
+
+            # Crear tabla consumo_interno si no existe (para registrar consumos internos)
+            print("Verificando tabla 'consumo_interno'...")
+            cursor.execute("CREATE TABLE IF NOT EXISTS consumo_interno (\n                id INTEGER PRIMARY KEY,\n                item_id INTEGER NOT NULL,\n                cantidad INTEGER DEFAULT 1,\n                costo FLOAT DEFAULT 0,\n                fecha DATETIME DEFAULT CURRENT_TIMESTAMP,\n                usuario_id INTEGER NOT NULL,\n                notas TEXT\n            )")
+            conn.commit()
+            print("✓ Tabla 'consumo_interno' verificada/creada")
             
             conn.close()
             print("\n¡Base de datos actualizada correctamente!")
