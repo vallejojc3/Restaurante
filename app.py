@@ -448,6 +448,101 @@ def lista_facturas():
     
     return render_template("lista_facturas.html", facturas=facturas)
 
+
+@app.route('/factura/<int:factura_id>/editar', methods=['GET', 'POST'])
+@login_required
+def editar_factura(factura_id):
+    factura = Factura.query.get_or_404(factura_id)
+    if getattr(current_user, 'rol', None) != 'admin':
+        flash('No tienes permisos para editar facturas', 'error')
+        return redirect(url_for('ver_factura', factura_id=factura_id))
+
+    config = ConfiguracionRestaurante.query.first()
+
+    if request.method == 'POST':
+        metodo_pago = request.form.get('metodo_pago', factura.metodo_pago)
+        propina = request.form.get('propina', factura.propina, type=float)
+        cliente_nombre = request.form.get('cliente_nombre', factura.cliente_nombre)
+        cliente_documento = request.form.get('cliente_documento', factura.cliente_documento)
+        notas = request.form.get('notas', factura.notas)
+        estado_pago = request.form.get('estado_pago', factura.estado_pago)
+        fecha_vencimiento_str = request.form.get('fecha_vencimiento')
+
+        desglose_pago = None
+        if metodo_pago == 'mixto':
+            desglose_pago = {
+                'efectivo': request.form.get('efectivo', 0, type=float),
+                'tarjeta': request.form.get('tarjeta', 0, type=float),
+                'transferencia': request.form.get('transferencia', 0, type=float)
+            }
+
+        # Recalcular subtotal desde la sesión asociada
+        subtotal = db.session.query(db.func.coalesce(db.func.sum(Pedido.cantidad * Pedido.precio_unitario), 0)).filter(Pedido.sesion_id == factura.sesion_id).scalar() or 0
+        iva = factura.iva if factura.iva is not None else 0
+        total = subtotal + propina + (iva or 0)
+
+        # Actualizar campos
+        factura.metodo_pago = metodo_pago
+        factura.propina = propina
+        factura.cliente_nombre = cliente_nombre
+        factura.cliente_documento = cliente_documento
+        factura.notas = notas
+        factura.estado_pago = estado_pago
+        factura.desglose_pago = json.dumps(desglose_pago) if desglose_pago else None
+        factura.subtotal = subtotal
+        factura.total = total
+
+        # Fecha vencimiento
+        if fecha_vencimiento_str:
+            try:
+                factura.fecha_vencimiento = datetime.strptime(fecha_vencimiento_str, '%Y-%m-%d').date()
+            except Exception:
+                factura.fecha_vencimiento = None
+        else:
+            factura.fecha_vencimiento = None
+
+        # Ajustes según estado de pago
+        if estado_pago == 'pagada':
+            factura.fecha_pago_real = datetime.now()
+            factura.saldo_pendiente = 0
+        elif estado_pago == 'pendiente':
+            factura.fecha_pago_real = None
+            factura.saldo_pendiente = total
+        db.session.commit()
+        flash(f'Factura {factura.numero_consecutivo} actualizada', 'success')
+        return redirect(url_for('ver_factura', factura_id=factura.id))
+
+    # GET
+    desglose = json.loads(factura.desglose_pago) if factura.desglose_pago else None
+    return render_template('editar_factura.html', factura=factura, config=config, desglose=desglose)
+
+
+@app.route('/factura/<int:factura_id>/eliminar', methods=['POST'])
+@login_required
+def eliminar_factura(factura_id):
+    factura = Factura.query.get_or_404(factura_id)
+    if getattr(current_user, 'rol', None) != 'admin':
+        flash('No tienes permisos para eliminar facturas', 'error')
+        return redirect(url_for('ver_factura', factura_id=factura_id))
+
+    sesion = factura.sesion
+    try:
+        # Revertir cambios en sesión y pedidos asociados
+        if sesion:
+            sesion.activa = True
+            sesion.fecha_fin = None
+            sesion.total = 0
+            db.session.query(Pedido).filter(Pedido.sesion_id == sesion.id).update({"pagado": False, "estado": "pendiente"}, synchronize_session=False)
+
+        db.session.delete(factura)
+        db.session.commit()
+        flash(f'Factura {factura.numero_consecutivo} eliminada', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash('Error al eliminar la factura', 'error')
+
+    return redirect(url_for('lista_facturas'))
+
 # ==========================================
 # RUTAS PARA CUENTAS POR COBRAR
 # ==========================================

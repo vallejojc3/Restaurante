@@ -96,6 +96,12 @@
                     <div class="factura-total">${{ '{:,.0f}'.format(factura.total) }}</div>
                     <div style="margin-top: 10px;">
                         <a href="{{ url_for('ver_factura', factura_id=factura.id) }}" class="btn btn-primary">Ver</a>
+                        {% if current_user.is_authenticated and current_user.rol == 'admin' %}
+                        <a href="{{ url_for('editar_factura', factura_id=factura.id) }}" class="btn btn-primary">✏️ Editar</a>
+                        <form method="POST" action="{{ url_for('eliminar_factura', factura_id=factura.id) }}" style="display:inline;" onsubmit="return confirm('¿Eliminar factura {{ factura.numero_consecutivo }}?')">
+                            <button type="submit" class="btn btn-secondary">🗑️ Eliminar</button>
+                        </form>
+                        {% endif %}
                     </div>
                 </div>
             </div>
