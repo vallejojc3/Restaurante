@@ -13,7 +13,26 @@ if os.path.exists('.env'):
     load_dotenv('.env')
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'clave-desarrollo-temporal-cambiar-en-produccion')
+app.secret_key = os.environ.get('SECRET_KEY', 'f644ec332890da16205984dab5d57cf7f003d332ef0a8686295b67d853d435f5')
+
+@app.before_request
+def before_first_request():
+    """
+    Se ejecuta antes del primer request.
+    Inicializa la base de datos si no existe.
+    """
+    # Marcar como inicializado para no ejecutar múltiples veces
+    if not hasattr(app, '_db_initialized'):
+        app._db_initialized = True
+        
+        try:
+            # Intentar una consulta simple
+            with app.app_context():
+                Usuario.query.first()
+        except:
+            # Si falla, inicializar
+            print("🔄 Inicializando base de datos en producción...")
+            init_db()
 
 # =========================
 # BASE DE DATOS
@@ -2404,36 +2423,44 @@ def reporte_financiero():
 # =========================
 
 def init_db():
+    """Inicializa la base de datos con datos por defecto"""
     with app.app_context():
+        # Crear todas las tablas
         db.create_all()
         
-        # Crear usuario admin si no existe
-        if not Usuario.query.filter_by(username='admin').first():
-            admin = Usuario(username='admin', nombre='Administrador', rol='admin')
-            admin.set_password('admin123')
-            db.session.add(admin)
+        # Verificar si ya existen usuarios
+        if Usuario.query.count() > 0:
+            print("✅ Base de datos ya inicializada")
+            return
+        
+        print("🔄 Inicializando base de datos...")
+        
+        # Crear usuario admin
+        admin = Usuario(username='admin', nombre='Administrador', rol='admin')
+        admin.set_password('admin123')
+        db.session.add(admin)
+        print("✓ Usuario admin creado")
         
         # Crear usuario mesero de prueba
-        if not Usuario.query.filter_by(username='mesero1').first():
-            mesero = Usuario(username='mesero1', nombre='Mesero 1', rol='mesero')
-            mesero.set_password('mesero123')
-            db.session.add(mesero)
+        mesero = Usuario(username='mesero1', nombre='Mesero 1', rol='mesero')
+        mesero.set_password('mesero123')
+        db.session.add(mesero)
+        print("✓ Usuario mesero1 creado")
         
         # Crear usuario cocina
-        if not Usuario.query.filter_by(username='cocina').first():
-            cocina = Usuario(username='cocina', nombre='Cocina', rol='cocina')
-            cocina.set_password('cocina123')
-            db.session.add(cocina)
+        cocina = Usuario(username='cocina', nombre='Cocina', rol='cocina')
+        cocina.set_password('cocina123')
+        db.session.add(cocina)
+        print("✓ Usuario cocina creado")
         
         # Crear mesas si no existen
         if Mesa.query.count() == 0:
             for i in range(1, 11):
                 mesa = Mesa(numero=i, capacidad=4)
                 db.session.add(mesa)
+            print("✓ 10 mesas creadas")
         
-        db.session.commit()
-        print("Base de datos inicializada correctamente")
-
+        # Crear categorías de gastos si no existen
         if CategoriaGasto.query.count() == 0:
             categorias_default = [
                 {'nombre': 'Ingredientes y Materia Prima', 'descripcion': 'Compras de alimentos, bebidas y suministros de cocina', 'color': '#28a745'},
@@ -2449,9 +2476,42 @@ def init_db():
             for cat_data in categorias_default:
                 categoria = CategoriaGasto(**cat_data)
                 db.session.add(categoria)
+            print("✓ Categorías de gastos creadas")
+        
+        # Crear configuración del restaurante si no existe
+        if ConfiguracionRestaurante.query.count() == 0:
+            config = ConfiguracionRestaurante(
+                nombre='Mi Restaurante',
+                nit='900.000.000-0',
+                direccion='Calle 123 #45-67',
+                ciudad='Zarzal, Valle del Cauca',
+                telefono='(+57) 300 000 0000',
+                regimen='Régimen Simplificado'
+            )
+            db.session.add(config)
+            print("✓ Configuración del restaurante creada")
         
         db.session.commit()
-        print("Categorías de gastos inicializadas correctamente")
+        print("✅ Base de datos inicializada correctamente\n")
+
+
+# =================================================================
+# AGREGAR ESTA FUNCIÓN PARA INICIALIZACIÓN AUTOMÁTICA
+# =================================================================
+
+def ensure_db_initialized():
+    """
+    Verifica si la base de datos está inicializada.
+    Si no lo está, la inicializa automáticamente.
+    Se ejecuta antes de cada request.
+    """
+    try:
+        # Intentar hacer una consulta simple
+        Usuario.query.first()
+    except Exception as e:
+        # Si falla, inicializar la base de datos
+        print("⚠️  Base de datos no inicializada. Inicializando...")
+        init_db()
 
 # ==========================================
 # RUTAS PARA PRESUPUESTOS
@@ -3372,6 +3432,15 @@ auto_init_db()
 # EJECUCIÓN LOCAL
 # =========================
 if __name__ == "__main__":
-    # Para desarrollo local
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    # Verificar e inicializar la base de datos automáticamente
+    with app.app_context():
+        try:
+            # Intentar acceder a la base de datos
+            Usuario.query.first()
+            print("✅ Base de datos disponible")
+        except:
+            # Si falla, inicializar
+            print("🔄 Inicializando base de datos por primera vez...")
+            init_db()
+    
+    app.run(debug=True)
