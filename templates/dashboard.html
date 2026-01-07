@@ -242,6 +242,19 @@
             50% { transform: scale(1.1); }
         }
 
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2); }
+            50% { box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4); }
+        }
+
+        .mesa-card.mesa-lista-entregar {
+            animation: glow 2s ease-in-out infinite;
+        }
+
+        .mesa-card.mesa-lista-entregar .badge {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
         /* Colores para diferentes tipos de accesos */
         .qa-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white !important; }
         .qa-primary .quick-access-title,
@@ -303,16 +316,31 @@
             box-shadow: 0 10px 25px rgba(0,0,0,0.15);
         }
 
-        .mesa-card.mesa-ocupada {
-            border-left: 4px solid #f59e0b;
-        }
-
+        /* Estados de las mesas según pedidos */
         .mesa-card.mesa-libre {
             border-left: 4px solid #10b981;
+            background: linear-gradient(to right, rgba(16, 185, 129, 0.05), white);
+        }
+
+        .mesa-card.mesa-en-preparacion {
+            border-left: 4px solid #f59e0b;
+            background: linear-gradient(to right, rgba(245, 158, 11, 0.05), white);
+        }
+
+        .mesa-card.mesa-lista-entregar {
+            border-left: 4px solid #3b82f6;
+            background: linear-gradient(to right, rgba(59, 130, 246, 0.05), white);
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+        }
+
+        .mesa-card.mesa-entregada {
+            border-left: 4px solid #8b5cf6;
+            background: linear-gradient(to right, rgba(139, 92, 246, 0.05), white);
         }
 
         .mesa-card.mesa-completa {
             border-left: 4px solid #06b6d4;
+            background: linear-gradient(to right, rgba(6, 182, 212, 0.05), white);
         }
 
         .mesa-header {
@@ -725,6 +753,30 @@
         {% if current_user.rol != 'cocina' %}
         <div class="mesas-section-title">🪑 Estado de las Mesas</div>
         
+        <!-- Leyenda de estados -->
+        <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-bottom: 1.5rem; padding: 1rem; background: white; border-radius: 0.75rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div style="width: 20px; height: 20px; background: #10b981; border-radius: 4px;"></div>
+                <span style="font-size: 0.85rem; color: #64748b;">Libre</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div style="width: 20px; height: 20px; background: #f59e0b; border-radius: 4px;"></div>
+                <span style="font-size: 0.85rem; color: #64748b;">⏳ En preparación</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div style="width: 20px; height: 20px; background: #0227f8; border-radius: 4px;"></div>
+                <span style="font-size: 0.85rem; color: #64748b;">🔔 Listo para entregar</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div style="width: 20px; height: 20px; background: #8b5cf6; border-radius: 4px;"></div>
+                <span style="font-size: 0.85rem; color: #64748b;">💰 Entregado - pendiente pago</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div style="width: 20px; height: 20px; background: #06b6d4; border-radius: 4px;"></div>
+                <span style="font-size: 0.85rem; color: #64748b;">✓ Completo y pagado</span>
+            </div>
+        </div>
+        
         <div class="mesas-grid">
             {% for mesa in mesas %}
             {% set info = info_mesas[mesa.id] %}
@@ -732,8 +784,12 @@
                 {% if info.sesion %}
                     {% if info.todos_entregados and not info.tiene_pendientes %}
                         mesa-completa
+                    {% elif info.todos_entregados and info.tiene_pendientes %}
+                        mesa-entregada
+                    {% elif info.pedidos|selectattr('estado', 'equalto', 'listo')|list|length > 0 %}
+                        mesa-lista-entregar
                     {% else %}
-                        mesa-ocupada
+                        mesa-en-preparacion
                     {% endif %}
                 {% else %}
                     mesa-libre
@@ -742,14 +798,16 @@
                     <h3>Mesa {{ mesa.numero }}</h3>
                     {% if info.sesion %}
                         {% if info.todos_entregados and not info.tiene_pendientes %}
-                        <span class="badge badge-info">Listo</span>
-                        {% elif info.tiene_pendientes %}
-                        <span class="badge badge-warning">Activa</span>
+                        <span class="badge badge-info">✓ Completo</span>
+                        {% elif info.todos_entregados and info.tiene_pendientes %}
+                        <span class="badge" style="background: #ddd6fe; color: #5b21b6;">💰 Pagar</span>
+                        {% elif info.pedidos|selectattr('estado', 'equalto', 'listo')|list|length > 0 %}
+                        <span class="badge" style="background: #dbeafe; color: #ff0101;">🔔 Entregar</span>
                         {% else %}
-                        <span class="badge badge-success">Pagado</span>
+                        <span class="badge badge-warning">⏳ Preparando</span>
                         {% endif %}
                     {% else %}
-                    <span class="badge badge-secondary">Libre</span>
+                    <span class="badge badge-success">Libre</span>
                     {% endif %}
                 </div>
                 
@@ -760,11 +818,29 @@
                 
                 <div class="mesa-info-compact">
                     <div class="info-row">
-                        <span class="info-label">Pedidos:</span>
+                        <span class="info-label">Total pedidos:</span>
                         <span class="info-value">{{ info.total_pedidos }}</span>
                     </div>
+                    {% if info.pedidos|selectattr('estado', 'equalto', 'pendiente')|list|length > 0 %}
                     <div class="info-row">
-                        <span class="info-label">Pendientes:</span>
+                        <span class="info-label">⏳ En preparación:</span>
+                        <span class="info-value" style="color: #f59e0b;">{{ info.pedidos|selectattr('estado', 'equalto', 'pendiente')|list|length }}</span>
+                    </div>
+                    {% endif %}
+                    {% if info.pedidos|selectattr('estado', 'equalto', 'listo')|list|length > 0 %}
+                    <div class="info-row">
+                        <span class="info-label">🔔 Listos:</span>
+                        <span class="info-value" style="color: #f63b3b;">{{ info.pedidos|selectattr('estado', 'equalto', 'listo')|list|length }}</span>
+                    </div>
+                    {% endif %}
+                    {% if info.pedidos|selectattr('estado', 'equalto', 'entregado')|list|length > 0 %}
+                    <div class="info-row">
+                        <span class="info-label">✓ Entregados:</span>
+                        <span class="info-value" style="color: #10b981;">{{ info.pedidos|selectattr('estado', 'equalto', 'entregado')|list|length }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="info-row">
+                        <span class="info-label">Pendientes pago:</span>
                         <span class="info-value">
                             {% if info.tiene_pendientes %}
                             {{ info.pedidos|selectattr('pagado', 'equalto', False)|list|length }} 💰
