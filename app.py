@@ -3289,6 +3289,89 @@ def api_calcular_costo_zona():
     # =========================
     # EJECUCIÓN
     # =========================
+
+# =========================
+# INICIALIZACIÓN AUTOMÁTICA (FALLBACK)
+# =========================
+# AGREGAR ESTO AL FINAL DE app.py, JUSTO ANTES DE "if __name__ == '__main__':"
+
+def auto_init_db():
+    """
+    Inicialización automática como fallback.
+    Se ejecuta al importar app.py en Railway con Gunicorn.
+    """
+    try:
+        with app.app_context():
+            # Verificar si la BD ya está inicializada
+            if Usuario.query.count() == 0:
+                print("🔄 Detectada BD vacía, inicializando automáticamente...")
+                
+                # Crear tablas
+                db.create_all()
+                
+                # Usuario admin
+                admin = Usuario(username='admin', nombre='Administrador', rol='admin')
+                admin.set_password('admin123')
+                db.session.add(admin)
+                
+                # Usuario mesero
+                mesero = Usuario(username='mesero1', nombre='Mesero 1', rol='mesero')
+                mesero.set_password('mesero123')
+                db.session.add(mesero)
+                
+                # Usuario cocina
+                cocina = Usuario(username='cocina', nombre='Cocina', rol='cocina')
+                cocina.set_password('cocina123')
+                db.session.add(cocina)
+                
+                # Mesas
+                for i in range(1, 11):
+                    mesa = Mesa(numero=i, capacidad=4)
+                    db.session.add(mesa)
+                
+                # Categorías de gastos
+                categorias_default = [
+                    {'nombre': 'Ingredientes y Materia Prima', 'descripcion': 'Compras de alimentos', 'color': '#28a745'},
+                    {'nombre': 'Salarios y Nómina', 'descripcion': 'Pagos a empleados', 'color': '#007bff'},
+                    {'nombre': 'Servicios Públicos', 'descripcion': 'Agua, luz, gas', 'color': '#ffc107'},
+                    {'nombre': 'Arriendo', 'descripcion': 'Pago de arriendo', 'color': '#dc3545'},
+                    {'nombre': 'Mantenimiento', 'descripcion': 'Reparaciones', 'color': '#6c757d'},
+                    {'nombre': 'Marketing', 'descripcion': 'Publicidad', 'color': '#e83e8c'},
+                    {'nombre': 'Impuestos', 'descripcion': 'Impuestos', 'color': '#fd7e14'},
+                    {'nombre': 'Otros Gastos', 'descripcion': 'Misceláneos', 'color': '#6610f2'}
+                ]
+                
+                for cat_data in categorias_default:
+                    categoria = CategoriaGasto(**cat_data)
+                    db.session.add(categoria)
+                
+                # Configuración del restaurante
+                config = ConfiguracionRestaurante(
+                    nombre='Ivaluth Restaurant',
+                    nit='900.000.000-0',
+                    direccion='Calle 123 #45-67',
+                    ciudad='Zarzal, Valle del Cauca',
+                    telefono='(+57) 300 000 0000',
+                    regimen='Régimen Simplificado'
+                )
+                db.session.add(config)
+                
+                db.session.commit()
+                print("✅ Base de datos inicializada automáticamente (fallback)")
+            else:
+                print("✅ Base de datos ya inicializada")
+                
+    except Exception as e:
+        # Si hay error, solo lo reportamos pero no detenemos la app
+        print(f"⚠️ Advertencia al verificar BD: {str(e)}")
+
+# Ejecutar auto-inicialización al importar (para Gunicorn en Railway)
+auto_init_db()
+
+# =========================
+# EJECUCIÓN LOCAL
+# =========================
 if __name__ == "__main__":
-    init_db()
-    
+    # Para desarrollo local
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
