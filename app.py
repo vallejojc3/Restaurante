@@ -120,8 +120,7 @@ def load_user(user_id):
 class Factura(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     numero_consecutivo = db.Column(db.String(50), unique=True, nullable=False)
-    sesion_id = db.Column(db.Integer, db.ForeignKey('sesion.id'), nullable=False)
-    fecha_emision = db.Column(db.DateTime, default=datetime.now)
+    sesion_id = db.Column(db.Integer, db.ForeignKey('sesion.id'), nullable=True)
     subtotal = db.Column(db.Float, default=0)
     iva = db.Column(db.Float, default=0)
     propina = db.Column(db.Float, default=0)
@@ -137,6 +136,7 @@ class Factura(db.Model):
     fecha_vencimiento = db.Column(db.Date, nullable=True)  # Cuándo debe pagar el cliente
     fecha_pago_real = db.Column(db.DateTime, nullable=True)  # Cuándo pagó realmente
     saldo_pendiente = db.Column(db.Float, default=0)  # Si pagó parcialmente
+    fecha_emision = db.Column(db.DateTime, default=datetime.now)
     
     sesion = db.relationship('Sesion', backref='facturas')
 
@@ -311,6 +311,260 @@ class ConsumoInterno(db.Model):
     usuario = db.relationship('Usuario', backref='consumos_registrados')
 
 # =========================
+# MODELOS DE DOMICILIOS
+# =========================
+
+class EstadoDomicilio:
+    """Estados posibles de un domicilio"""
+    PENDIENTE = 'pendiente'
+    PREPARANDO = 'preparando'
+    LISTO = 'listo'
+    EN_CAMINO = 'en_camino'
+    ENTREGADO = 'entregado'
+    CANCELADO = 'cancelado'
+
+class Domicilio(db.Model):
+    """
+    RAZÓN: Gestionar pedidos a domicilio con toda su información.
+    Similar a una sesión de mesa, pero para entregas externas.
+    """
+    # =================================================================
+    # IDENTIFICADOR ÚNICO
+    # =================================================================
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # =================================================================
+    # INFORMACIÓN DEL CLIENTE (datos de contacto y dirección)
+    # =================================================================
+    cliente_nombre = db.Column(db.String(200), nullable=False)       # "Juan Pérez"
+    cliente_telefono = db.Column(db.String(50), nullable=False)      # "3001234567"
+    cliente_direccion = db.Column(db.Text, nullable=False)           # "Calle 10 #5-20"
+    cliente_barrio = db.Column(db.String(100))                       # "Centro"
+    cliente_referencias = db.Column(db.Text)                         # "Casa azul, portón negro"
+    
+    # =================================================================
+    # INFORMACIÓN DEL PEDIDO (fechas y tiempos)
+    # =================================================================
+    fecha_pedido = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    fecha_entrega_estimada = db.Column(db.DateTime)                  # Opcional
+    fecha_entrega_real = db.Column(db.DateTime)                      # Cuando se entrega
+    
+    # =================================================================
+    # ESTADO DEL DOMICILIO (flujo del pedido)
+    # =================================================================
+    # Valores posibles: 'pendiente', 'preparando', 'listo', 'en_camino', 'entregado', 'cancelado'
+    estado = db.Column(db.String(20), default=EstadoDomicilio.PENDIENTE)
+    
+    # =================================================================
+    # COSTOS (cálculo del total)
+    # =================================================================
+    subtotal = db.Column(db.Float, default=0)              # Suma de productos
+    costo_domicilio = db.Column(db.Float, default=0)       # Costo de envío
+    propina = db.Column(db.Float, default=0)               # Propina opcional
+    total = db.Column(db.Float, default=0)                 # subtotal + costo_domicilio + propina
+    
+    # =================================================================
+    # MÉTODO DE PAGO (cómo paga el cliente)
+    # =================================================================
+    metodo_pago = db.Column(db.String(50), default='efectivo')  # 'efectivo', 'tarjeta', 'transferencia'
+    pagado = db.Column(db.Boolean, default=False)               # Si ya pagó
+    
+    # =================================================================
+    # RESPONSABLES (quién toma y quién entrega)
+    # =================================================================
+    # ID del usuario que tomó el pedido (mesero/admin)
+    tomado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    
+    # ID del repartidor asignado (puede ser NULL si aún no se asigna)
+    repartidor_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    
+    # =================================================================
+    # FACTURACIÓN (relación con tabla Factura)
+    # =================================================================
+    # ID de la factura generada (NULL si aún no se factura)
+    factura_id = db.Column(db.Integer, db.ForeignKey('factura.id'))
+    
+    # =================================================================
+    # NOTAS ADICIONALES
+    # =================================================================
+    notas = db.Column(db.Text)                          # Notas del pedido
+    notas_cancelacion = db.Column(db.Text)              # Por qué se canceló
+    
+    # =================================================================
+    # TIMESTAMPS (control de tiempos)
+    # =================================================================
+    estado_actualizado = db.Column(db.DateTime, default=datetime.now)
+    
+    # =================================================================
+    # RELACIONES (conexiones con otras tablas)
+    # =================================================================
+    
+    # Relación con Usuario (quién tomó el pedido)
+    tomado_por = db.relationship('Usuario', 
+                                 foreign_keys=[tomado_por_id], 
+                                 backref='domicilios_tomados')
+    
+    # Relación con Usuario (quién entrega)
+    repartidor = db.relationship('Usuario', 
+                                 foreign_keys=[repartidor_id], 
+                                 backref='domicilios_asignados')
+    
+    # Relación con ItemDomicilio (productos del pedido)
+    # lazy='select' = carga bajo demanda
+    # cascade='all, delete-orphan' = si eliminas el domicilio, elimina los items
+    items = db.relationship('ItemDomicilio', 
+                           backref='domicilio', 
+                           lazy='select', 
+                           cascade='all, delete-orphan')
+    
+    # =================================================================
+    # 🔥 RELACIÓN CON FACTURA (LA MÁS IMPORTANTE PARA TU PROBLEMA)
+    # =================================================================
+    # Esta línea crea una relación bidireccional:
+    # - domicilio.factura → accede a la factura
+    # - factura.domicilios → accede a los domicilios de esa factura
+    #
+    # lazy='dynamic' significa que factura.domicilios devuelve una query
+    # que puedes filtrar o usar .first(), .all(), etc.
+    factura = db.relationship('Factura', 
+                             backref=db.backref('domicilios', lazy='dynamic'))
+    
+    # =================================================================
+    # PROPIEDADES CALCULADAS (@property)
+    # =================================================================
+    
+    @property
+    def tiempo_transcurrido(self):
+        """
+        Calcula cuánto tiempo ha pasado desde que se tomó el pedido
+        Retorna string legible: "15 min" o "1h 30min"
+        """
+        delta = datetime.now() - self.fecha_pedido
+        minutos = int(delta.total_seconds() / 60)
+        if minutos < 60:
+            return f"{minutos} min"
+        else:
+            horas = minutos // 60
+            mins = minutos % 60
+            return f"{horas}h {mins}min"
+    
+    @property
+    def esta_retrasado(self):
+        """
+        Verifica si el domicilio está tardando más de lo normal
+        Retorna True si lleva más de 45 minutos y no ha sido entregado
+        """
+        if self.estado in [EstadoDomicilio.ENTREGADO, EstadoDomicilio.CANCELADO]:
+            return False
+        
+        delta = datetime.now() - self.fecha_pedido
+        minutos = int(delta.total_seconds() / 60)
+        
+        # Alertar si lleva más de 45 minutos y no ha sido entregado
+        return minutos > 45
+    
+    @property
+    def color_estado(self):
+        """
+        Color del badge según el estado (para mostrar en HTML)
+        Retorna código de color hexadecimal
+        """
+        colores = {
+            'pendiente': '#ffc107',      # amarillo/warning
+            'preparando': '#17a2b8',     # cyan/info
+            'listo': '#007bff',          # azul/primary
+            'en_camino': '#6f42c1',      # púrpura
+            'entregado': '#28a745',      # verde/success
+            'cancelado': '#dc3545'       # rojo/danger
+        }
+        return colores.get(self.estado, '#6c757d')
+    
+    @property
+    def domiciliario(self):
+        """
+        Nombre del repartidor asignado
+        Retorna "No asignado" si no hay repartidor
+        """
+        if self.repartidor:
+            return self.repartidor.nombre
+        return "No asignado"
+
+
+class ItemDomicilio(db.Model):
+    """
+    RAZÓN: Items individuales de cada domicilio.
+    Similar a los pedidos de mesa, pero asociados a domicilios.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    domicilio_id = db.Column(db.Integer, db.ForeignKey('domicilio.id'), nullable=False)
+    
+    # Producto
+    item_menu_id = db.Column(db.Integer, db.ForeignKey('item_menu.id'))
+    producto_nombre = db.Column(db.String(200), nullable=False)
+    cantidad = db.Column(db.Integer, default=1)
+    precio_unitario = db.Column(db.Float, nullable=False)
+    
+    # Personalización
+    notas = db.Column(db.Text)
+    
+    # NUEVO: Estado de preparación en cocina
+    estado_cocina = db.Column(db.String(20), default='pendiente')  # pendiente, preparando, listo
+    
+    # Relaciones
+    item_menu = db.relationship('ItemMenu', backref='items_domicilio')
+    
+    @property
+    def subtotal(self):
+        return self.cantidad * self.precio_unitario
+    
+    @property
+    def producto(self):
+        """Alias para compatibilidad con templates"""
+        return self.producto_nombre
+
+
+class Repartidor(db.Model):
+    """
+    RAZÓN: Gestionar información de repartidores.
+    Opcional: Si los repartidores no son usuarios del sistema.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(200), nullable=False)
+    telefono = db.Column(db.String(50))
+    placa_vehiculo = db.Column(db.String(20))
+    tipo_vehiculo = db.Column(db.String(50))  # moto, bicicleta, carro
+    activo = db.Column(db.Boolean, default=True)
+    fecha_registro = db.Column(db.DateTime, default=datetime.now)
+    
+    # Estadísticas
+    total_domicilios = db.Column(db.Integer, default=0)
+    calificacion_promedio = db.Column(db.Float, default=5.0)
+    
+    # Relaciones (si no usas Usuario como repartidor)
+    # domicilios = db.relationship('Domicilio', backref='repartidor_externo')
+
+
+class ZonaDelivery(db.Model):
+    """
+    RAZÓN: Definir zonas de cobertura y costos de envío.
+    Permite calcular automáticamente el costo según el barrio.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(100), nullable=False)  # "Centro", "Norte", "Sur"
+    barrios = db.Column(db.Text)  # Lista de barrios separados por comas
+    costo_envio = db.Column(db.Float, default=0)
+    tiempo_estimado = db.Column(db.Integer, default=30)  # minutos
+    activa = db.Column(db.Boolean, default=True)
+    orden = db.Column(db.Integer, default=0)
+    
+    @property
+    def lista_barrios(self):
+        """Devuelve lista de barrios"""
+        if self.barrios:
+            return [b.strip() for b in self.barrios.split(',')]
+        return []
+
+# =========================
 # RUTAS
 # =========================
 # ==========================================
@@ -427,17 +681,30 @@ def facturar_sesion(sesion_id):
                          iva=iva,
                          datetime=datetime)  # ← ESTA LÍNEA ES CLAVE
 
+# =================================================================
+# REEMPLAZAR LA RUTA ver_factura EN app.py (línea ~620)
+# =================================================================
+
 @app.route("/factura/<int:factura_id>")
 @login_required
 def ver_factura(factura_id):
-    """Ver una factura generada"""
+    """Ver una factura generada - OPTIMIZADA PARA IMPRESORAS TÉRMICAS"""
     factura = Factura.query.get_or_404(factura_id)
     config = ConfiguracionRestaurante.query.first()
+    
+    # Crear configuración por defecto si no existe
+    if not config:
+        config = ConfiguracionRestaurante()
+        db.session.add(config)
+        db.session.commit()
     
     # Parsear desglose de pago si existe
     desglose = None
     if factura.desglose_pago:
-        desglose = json.loads(factura.desglose_pago)
+        try:
+            desglose = json.loads(factura.desglose_pago)
+        except:
+            desglose = None
     
     return render_template("ver_factura.html", 
                          factura=factura, 
@@ -644,27 +911,69 @@ def editar_factura(factura_id):
 @app.route('/factura/<int:factura_id>/eliminar', methods=['POST'])
 @login_required
 def eliminar_factura(factura_id):
+    """
+    RAZÓN: Eliminar facturas y revertir los cambios asociados.
+    Funciona tanto para facturas de sesiones como de domicilios.
+    Al eliminar, la factura desaparece de los reportes de ingresos automáticamente.
+    """
     factura = Factura.query.get_or_404(factura_id)
+    
+    # Solo admin puede eliminar facturas
     if getattr(current_user, 'rol', None) != 'admin':
         flash('No tienes permisos para eliminar facturas', 'error')
         return redirect(url_for('ver_factura', factura_id=factura_id))
 
-    sesion = factura.sesion
+    numero_factura = factura.numero_consecutivo
+    monto = factura.total
+    
     try:
-        # Revertir cambios en sesión y pedidos asociados
-        if sesion:
-            sesion.activa = True
-            sesion.fecha_fin = None
-            sesion.total = 0
-            db.session.query(Pedido).filter(Pedido.sesion_id == sesion.id).update({"pagado": False, "estado": "pendiente"}, synchronize_session=False)
-
+        # ============================================
+        # CASO 1: FACTURA DE SESIÓN (MESA)
+        # ============================================
+        if factura.sesion_id:
+            sesion = factura.sesion
+            if sesion:
+                # Reactivar la sesión
+                sesion.activa = True
+                sesion.fecha_fin = None
+                sesion.total = 0
+                
+                # Revertir estado de los pedidos
+                db.session.query(Pedido).filter(
+                    Pedido.sesion_id == sesion.id
+                ).update({
+                    "pagado": False,
+                    "estado": "pendiente"
+                }, synchronize_session=False)
+        
+        # ============================================
+        # CASO 2: FACTURA DE DOMICILIO
+        # ============================================
+        else:
+            # Buscar domicilio asociado a esta factura
+            domicilio = Domicilio.query.filter_by(factura_id=factura_id).first()
+            if domicilio:
+                # Desasociar la factura del domicilio
+                domicilio.factura_id = None
+                domicilio.pagado = False
+                # El domicilio queda en su estado actual (entregado)
+                # pero sin factura asociada, permitiendo re-facturar
+        
+        # ============================================
+        # ELIMINAR LA FACTURA
+        # ============================================
         db.session.delete(factura)
         db.session.commit()
-        flash(f'Factura {factura.numero_consecutivo} eliminada', 'success')
+        
+        flash(f'✓ Factura {numero_factura} eliminada exitosamente (${monto:,.0f})', 'success')
+        flash('La factura ha sido eliminada de los reportes de ingresos', 'info')
+        
     except Exception as e:
         db.session.rollback()
-        flash('Error al eliminar la factura', 'error')
-
+        flash(f'❌ Error al eliminar la factura: {str(e)}', 'error')
+        return redirect(url_for('ver_factura', factura_id=factura_id))
+    
+    # Redirigir a la lista de facturas
     return redirect(url_for('lista_facturas'))
 
 # ==========================================
@@ -2358,8 +2667,627 @@ def copiar_presupuestos_mes_siguiente():
     return redirect(url_for('lista_presupuestos'))
 
 # =========================
-# EJECUCIÓN
+# RUTAS DE DOMICILIOS
 # =========================
 
+@app.route("/domicilios")
+@login_required
+def lista_domicilios():
+    """
+    RAZÓN: Vista principal de domicilios con filtros por estado y fecha.
+    """
+    # Obtener filtros
+    estado = request.args.get('estado', 'todos')
+    fecha = request.args.get('fecha')
+    
+    # Query base
+    query = Domicilio.query
+    
+    # Filtrar por estado
+    if estado != 'todos':
+        query = query.filter(Domicilio.estado == estado)
+    
+    # Filtrar por fecha (con lógica de cierre a las 03:00)
+    if fecha:
+        try:
+            fecha_obj = datetime.strptime(fecha, '%Y-%m-%d').date()
+            inicio = datetime(fecha_obj.year, fecha_obj.month, fecha_obj.day, 3, 0, 0)
+            fin = inicio + timedelta(days=1)
+            query = query.filter(Domicilio.fecha_pedido >= inicio, Domicilio.fecha_pedido < fin)
+        except ValueError:
+            flash('Fecha inválida', 'error')
+    else:
+        # Por defecto, mostrar domicilios del día actual
+        hoy = datetime.now().date()
+        inicio = datetime(hoy.year, hoy.month, hoy.day, 3, 0, 0)
+        if datetime.now().hour < 3:
+            inicio = inicio - timedelta(days=1)
+        fin = inicio + timedelta(days=1)
+        query = query.filter(Domicilio.fecha_pedido >= inicio, Domicilio.fecha_pedido < fin)
+    
+    # Ordenar por fecha descendente
+    domicilios = query.order_by(Domicilio.fecha_pedido.desc()).all()
+    
+    # Calcular estadísticas
+    total_domicilios = len(domicilios)
+    pendientes = sum(1 for d in domicilios if d.estado == EstadoDomicilio.PENDIENTE)
+    en_preparacion = sum(1 for d in domicilios if d.estado == EstadoDomicilio.PREPARANDO)
+    en_camino = sum(1 for d in domicilios if d.estado == EstadoDomicilio.EN_CAMINO)
+    entregados = sum(1 for d in domicilios if d.estado == EstadoDomicilio.ENTREGADO)
+    total_ventas = sum(d.total for d in domicilios if d.estado == EstadoDomicilio.ENTREGADO)
+    
+    return render_template("domicilios/lista_domicilios.html",
+                         domicilios=domicilios,
+                         total_domicilios=total_domicilios,
+                         pendientes=pendientes,
+                         en_preparacion=en_preparacion,
+                         en_camino=en_camino,
+                         entregados=entregados,
+                         total_ventas=total_ventas,
+                         estado_filtro=estado,
+                         fecha_filtro=fecha,
+                         now=datetime.now())
+
+# =========================
+# AGREGAR ESTA RUTA EN app.py
+# Insertarla DESPUÉS de lista_domicilios() y ANTES de nuevo_domicilio()
+# =========================
+
+@app.route("/domicilio/<int:domicilio_id>")
+@login_required
+def ver_domicilio(domicilio_id):
+    """
+    RAZÓN: Ver detalles completos de un domicilio específico.
+    Muestra información del cliente, productos, estado y permite acciones.
+    """
+    domicilio = Domicilio.query.get_or_404(domicilio_id)
+    
+    # Obtener usuarios que pueden ser repartidores (para el formulario de cambio de estado)
+    repartidores = Usuario.query.filter(
+        Usuario.rol.in_(['admin', 'mesero'])
+    ).order_by(Usuario.nombre).all()
+    
+    # Obtener zonas para el formulario de edición
+    zonas = ZonaDelivery.query.filter_by(activa=True).order_by(ZonaDelivery.orden).all()
+    
+    return render_template("domicilios/ver_domicilio.html",
+                         domicilio=domicilio,
+                         repartidores=repartidores,
+                         zonas=zonas,
+                         now=datetime.now())
+
+
+@app.route("/domicilio/nuevo", methods=["GET", "POST"])
+@login_required
+def nuevo_domicilio():
+    """
+    RAZÓN: Formulario para crear un nuevo pedido a domicilio.
+    """
+    if request.method == "POST":
+        try:
+            # Datos del cliente
+            cliente_nombre = request.form.get("cliente_nombre")
+            cliente_telefono = request.form.get("cliente_telefono")
+            cliente_direccion = request.form.get("cliente_direccion")
+            cliente_barrio = request.form.get("cliente_barrio")
+            cliente_referencias = request.form.get("cliente_referencias", "")
+            
+            # Costos
+            costo_domicilio = request.form.get("costo_domicilio", 0, type=float)
+            metodo_pago = request.form.get("metodo_pago", "efectivo")
+            notas = request.form.get("notas", "")
+            
+            # Items del pedido (JSON)
+            items_json = request.form.get("items_json")
+            if not items_json:
+                flash('Debes agregar al menos un producto', 'error')
+                return redirect(url_for('nuevo_domicilio'))
+            
+            items_data = json.loads(items_json)
+            
+            if not items_data:
+                flash('Debes agregar al menos un producto', 'error')
+                return redirect(url_for('nuevo_domicilio'))
+            
+            # Calcular subtotal
+            subtotal = sum(item['cantidad'] * item['precio'] for item in items_data)
+            total = subtotal + costo_domicilio
+            
+            # Crear domicilio
+            domicilio = Domicilio(
+                cliente_nombre=cliente_nombre,
+                cliente_telefono=cliente_telefono,
+                cliente_direccion=cliente_direccion,
+                cliente_barrio=cliente_barrio,
+                cliente_referencias=cliente_referencias,
+                subtotal=subtotal,
+                costo_domicilio=costo_domicilio,
+                total=total,
+                metodo_pago=metodo_pago,
+                notas=notas,
+                tomado_por_id=current_user.id
+            )
+            
+            db.session.add(domicilio)
+            db.session.flush()  # Para obtener el ID
+            
+            # Agregar items
+            for item_data in items_data:
+                item = ItemDomicilio(
+                    domicilio_id=domicilio.id,
+                    item_menu_id=item_data.get('item_id'),
+                    producto_nombre=item_data['nombre'],
+                    cantidad=item_data['cantidad'],
+                    precio_unitario=item_data['precio'],
+                    notas=item_data.get('notas', '')
+                )
+                db.session.add(item)
+            
+            db.session.commit()
+            
+            flash(f'Domicilio #{domicilio.id} creado exitosamente - Total: ${total:,.0f}', 'success')
+            return redirect(url_for('ver_domicilio', domicilio_id=domicilio.id))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error al crear domicilio: {str(e)}', 'error')
+            return redirect(url_for('nuevo_domicilio'))
+    
+    # GET: Mostrar formulario
+    items_menu = ItemMenu.query.filter_by(disponible=True).order_by(
+        ItemMenu.categoria_id, ItemMenu.orden
+    ).all()
+    
+    zonas = ZonaDelivery.query.filter_by(activa=True).order_by(ZonaDelivery.orden).all()
+    usuarios = Usuario.query.filter(Usuario.rol.in_(['admin', 'mesero'])).order_by(Usuario.nombre).all()
+    
+    return render_template("domicilios/nuevo_domicilio.html",
+                         items_menu=items_menu,
+                         zonas=zonas,
+                         usuarios=usuarios,
+                         now=datetime.now())
+
+
+# =========================
+# NUEVA RUTA: ACTUALIZAR ESTADO ITEM COCINA
+# =========================
+
+@app.route("/domicilio/item/<int:item_id>/estado", methods=["POST"])
+@login_required
+def actualizar_estado_item_domicilio(item_id):
+    """
+    RAZÓN: Permite a cocina actualizar el estado de preparación de cada item
+    """
+    item = ItemDomicilio.query.get_or_404(item_id)
+    nuevo_estado = request.form.get("estado")
+    
+    estados_validos = ['pendiente', 'preparando', 'listo']
+    
+    if nuevo_estado not in estados_validos:
+        flash('Estado inválido', 'error')
+        return redirect(url_for('ver_domicilio', domicilio_id=item.domicilio_id))
+    
+    item.estado_cocina = nuevo_estado
+    db.session.commit()
+    
+    # Si todos los items están listos, actualizar estado del domicilio
+    if nuevo_estado == 'listo':
+        todos_listos = all(i.estado_cocina == 'listo' for i in item.domicilio.items)
+        if todos_listos and item.domicilio.estado == 'preparando':
+            item.domicilio.estado = EstadoDomicilio.LISTO
+            item.domicilio.estado_actualizado = datetime.now()
+            db.session.commit()
+            flash(f'Domicilio #{item.domicilio_id} marcado como LISTO para enviar', 'success')
+    
+    flash(f'Estado actualizado: {nuevo_estado}', 'success')
+    return redirect(url_for('ver_domicilio', domicilio_id=item.domicilio_id))
+
+
+
+@app.route("/domicilio/<int:domicilio_id>/actualizar_estado", methods=["POST"])
+@login_required
+def actualizar_estado_domicilio(domicilio_id):
+    """
+    RAZÓN: Cambiar el estado del domicilio (pendiente → preparando → listo → en_camino → entregado)
+    """
+    domicilio = Domicilio.query.get_or_404(domicilio_id)
+    nuevo_estado = request.form.get("estado")
+    
+    estados_validos = [
+        EstadoDomicilio.PENDIENTE,
+        EstadoDomicilio.PREPARANDO,
+        EstadoDomicilio.LISTO,
+        EstadoDomicilio.EN_CAMINO,
+        EstadoDomicilio.ENTREGADO,
+        EstadoDomicilio.CANCELADO
+    ]
+    
+    if nuevo_estado not in estados_validos:
+        flash('Estado inválido', 'error')
+        return redirect(url_for('ver_domicilio', domicilio_id=domicilio_id))
+    
+    domicilio.estado = nuevo_estado
+    domicilio.estado_actualizado = datetime.now()
+    
+    # Si se marca como entregado, guardar la hora de entrega
+    if nuevo_estado == EstadoDomicilio.ENTREGADO:
+        domicilio.fecha_entrega_real = datetime.now()
+        domicilio.pagado = True
+    
+    # Si se asigna repartidor
+    repartidor_id = request.form.get("repartidor_id", type=int)
+    if repartidor_id:
+        domicilio.repartidor_id = repartidor_id
+    
+    db.session.commit()
+    
+    flash(f'Estado actualizado a: {nuevo_estado}', 'success')
+    return redirect(url_for('ver_domicilio', domicilio_id=domicilio_id))
+
+
+@app.route("/domicilio/<int:domicilio_id>/editar", methods=["GET", "POST"])
+@login_required
+def editar_domicilio(domicilio_id):
+    """
+    RAZÓN: Editar información de un domicilio existente.
+    """
+    domicilio = Domicilio.query.get_or_404(domicilio_id)
+    
+    # Solo se puede editar si no ha sido entregado
+    if domicilio.estado == EstadoDomicilio.ENTREGADO and current_user.rol != 'admin':
+        flash('No se puede editar un domicilio ya entregado', 'error')
+        return redirect(url_for('ver_domicilio', domicilio_id=domicilio_id))
+    
+    if request.method == "POST":
+        try:
+            # Actualizar datos del cliente
+            domicilio.cliente_nombre = request.form.get("cliente_nombre")
+            domicilio.cliente_telefono = request.form.get("cliente_telefono")
+            domicilio.cliente_direccion = request.form.get("cliente_direccion")
+            domicilio.cliente_barrio = request.form.get("cliente_barrio")
+            domicilio.cliente_referencias = request.form.get("cliente_referencias", "")
+            
+            # Actualizar costos
+            domicilio.costo_domicilio = request.form.get("costo_domicilio", 0, type=float)
+            domicilio.metodo_pago = request.form.get("metodo_pago")
+            domicilio.notas = request.form.get("notas", "")
+            
+            # Recalcular total
+            domicilio.total = domicilio.subtotal + domicilio.costo_domicilio
+            
+            db.session.commit()
+            
+            flash('Domicilio actualizado exitosamente', 'success')
+            return redirect(url_for('ver_domicilio', domicilio_id=domicilio_id))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error al actualizar: {str(e)}', 'error')
+    
+    # GET
+    zonas = ZonaDelivery.query.filter_by(activa=True).order_by(ZonaDelivery.orden).all()
+    usuarios = Usuario.query.filter(Usuario.rol.in_(['admin', 'mesero'])).order_by(Usuario.nombre).all()
+    
+    return render_template("domicilios/editar_domicilio.html",
+                         domicilio=domicilio,
+                         zonas=zonas,
+                         usuarios=usuarios)
+
+
+@app.route("/domicilio/<int:domicilio_id>/cancelar", methods=["POST"])
+@login_required
+def cancelar_domicilio(domicilio_id):
+    """
+    RAZÓN: Cancelar un domicilio con motivo.
+    """
+    if current_user.rol not in ['admin', 'mesero']:
+        flash('No tienes permisos para cancelar domicilios', 'error')
+        return redirect(url_for('lista_domicilios'))
+    
+    domicilio = Domicilio.query.get_or_404(domicilio_id)
+    
+    if domicilio.estado == EstadoDomicilio.ENTREGADO:
+        flash('No se puede cancelar un domicilio ya entregado', 'error')
+        return redirect(url_for('ver_domicilio', domicilio_id=domicilio_id))
+    
+    motivo = request.form.get("motivo_cancelacion", "")
+    
+    domicilio.estado = EstadoDomicilio.CANCELADO
+    domicilio.notas_cancelacion = motivo
+    domicilio.estado_actualizado = datetime.now()
+    
+    db.session.commit()
+    
+    flash(f'Domicilio #{domicilio_id} cancelado', 'success')
+    return redirect(url_for('lista_domicilios'))
+
+
+@app.route("/domicilio/<int:domicilio_id>/facturar", methods=["GET", "POST"])
+@login_required
+def facturar_domicilio(domicilio_id):
+    """
+    RAZÓN: Generar factura para un domicilio entregado.
+    Similar a facturar_sesion pero para domicilios.
+    """
+    domicilio = Domicilio.query.get_or_404(domicilio_id)
+    config = ConfiguracionRestaurante.query.first()
+    
+    if not config:
+        config = ConfiguracionRestaurante()
+        db.session.add(config)
+        db.session.commit()
+    
+    if domicilio.factura_id:
+        flash('Este domicilio ya tiene una factura generada', 'error')
+        return redirect(url_for('ver_factura', factura_id=domicilio.factura_id))
+    
+    if request.method == "POST":
+        try:
+            # Obtener datos del formulario
+            propina = request.form.get("propina", 0, type=float)
+            estado_pago = request.form.get("estado_pago", "pagada")
+            fecha_vencimiento_str = request.form.get("fecha_vencimiento")
+            notas_factura = request.form.get("notas", "")
+            
+            # Calcular totales
+            subtotal = domicilio.subtotal + domicilio.costo_domicilio
+            iva = 0
+            total = subtotal + propina
+            
+            # Generar número consecutivo
+            ultima_factura = Factura.query.order_by(Factura.id.desc()).first()
+            if ultima_factura:
+                ultimo_num = int(ultima_factura.numero_consecutivo.split('-')[1])
+                nuevo_num = ultimo_num + 1
+            else:
+                nuevo_num = 1
+            
+            numero_consecutivo = f"FACT-{nuevo_num:06d}"
+            
+            # Convertir fecha de vencimiento
+            fecha_vencimiento = None
+            if fecha_vencimiento_str and estado_pago == 'pendiente':
+                fecha_vencimiento = datetime.strptime(fecha_vencimiento_str, '%Y-%m-%d').date()
+            
+            # Crear factura (sin sesion_id porque es domicilio)
+            factura = Factura(
+                numero_consecutivo=numero_consecutivo,
+                sesion_id=None,  # NULL para domicilios
+                subtotal=subtotal,
+                iva=iva,
+                propina=propina,
+                total=total,
+                metodo_pago=domicilio.metodo_pago,
+                cliente_nombre=domicilio.cliente_nombre,
+                cliente_documento="",
+                notas=notas_factura,
+                estado_pago=estado_pago,
+                fecha_vencimiento=fecha_vencimiento,
+                fecha_pago_real=datetime.now() if estado_pago == 'pagada' else None,
+                saldo_pendiente=total if estado_pago == 'pendiente' else 0
+            )
+            
+            db.session.add(factura)
+            db.session.flush()
+            
+            # Asociar factura al domicilio
+            domicilio.factura_id = factura.id
+            domicilio.pagado = True
+            
+            db.session.commit()
+            
+            flash(f'Factura {numero_consecutivo} generada exitosamente', 'success')
+            return redirect(url_for('ver_factura', factura_id=factura.id))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error al generar factura: {str(e)}', 'error')
+            return redirect(url_for('facturar_domicilio', domicilio_id=domicilio_id))
+    
+    # GET: Calcular fecha de vencimiento por defecto (15 días)
+    fecha_vencimiento_default = (datetime.now() + timedelta(days=15)).strftime('%Y-%m-%d')
+    
+    return render_template("domicilios/facturar_domicilio.html",
+                         domicilio=domicilio,
+                         config=config,
+                         datetime=datetime,
+                         fecha_vencimiento_default=fecha_vencimiento_default)
+# =========================
+# VISTA DE COCINA PARA DOMICILIOS
+# =========================
+
+@app.route("/cocina/domicilios")
+@login_required
+def cocina_domicilios():
+    """
+    RAZÓN: Vista especial para que cocina vea items de domicilios pendientes
+    """
+    if current_user.rol != 'cocina':
+        flash('Solo el personal de cocina puede acceder', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # Obtener domicilios activos del día
+    hoy = datetime.now().date()
+    inicio = datetime(hoy.year, hoy.month, hoy.day, 3, 0, 0)
+    if datetime.now().hour < 3:
+        inicio = inicio - timedelta(days=1)
+    fin = inicio + timedelta(days=1)
+    
+    domicilios_activos = Domicilio.query.filter(
+        Domicilio.fecha_pedido >= inicio,
+        Domicilio.fecha_pedido < fin,
+        Domicilio.estado.in_([
+            EstadoDomicilio.PENDIENTE,
+            EstadoDomicilio.PREPARANDO,
+            EstadoDomicilio.LISTO
+        ])
+    ).order_by(Domicilio.fecha_pedido).all()
+    
+    return render_template("domicilios/cocina_domicilios.html",
+                         domicilios=domicilios_activos,
+                         now=datetime.now())
+
+
+# =========================
+# RUTAS DE ZONAS DE DELIVERY
+# =========================
+
+@app.route("/zonas_delivery")
+@login_required
+def lista_zonas_delivery():
+    """
+    RAZÓN: Administrar zonas de cobertura y costos de envío.
+    """
+    if current_user.rol != 'admin':
+        flash('Solo administradores pueden gestionar zonas', 'error')
+        return redirect(url_for('dashboard'))
+    
+    zonas = ZonaDelivery.query.order_by(ZonaDelivery.orden).all()
+    
+    return render_template("domicilios/zonas_delivery.html", zonas=zonas)
+
+
+@app.route("/zona_delivery/nueva", methods=["GET", "POST"])
+@login_required
+def nueva_zona_delivery():
+    """
+    RAZÓN: Crear una nueva zona de delivery.
+    """
+    if current_user.rol != 'admin':
+        flash('Solo administradores pueden crear zonas', 'error')
+        return redirect(url_for('dashboard'))
+    
+    if request.method == "POST":
+        zona = ZonaDelivery(
+            nombre=request.form.get("nombre"),
+            barrios=request.form.get("barrios"),
+            costo_envio=request.form.get("costo_envio", type=float),
+            tiempo_estimado=request.form.get("tiempo_estimado", 30, type=int),
+            orden=request.form.get("orden", 0, type=int)
+        )
+        
+        db.session.add(zona)
+        db.session.commit()
+        
+        flash(f'Zona {zona.nombre} creada exitosamente', 'success')
+        return redirect(url_for('lista_zonas_delivery'))
+    
+    return render_template("domicilios/nueva_zona.html")
+
+
+@app.route("/zona_delivery/<int:zona_id>/editar", methods=["GET", "POST"])
+@login_required
+def editar_zona_delivery(zona_id):
+    """
+    RAZÓN: Editar una zona existente.
+    """
+    if current_user.rol != 'admin':
+        flash('Solo administradores pueden editar zonas', 'error')
+        return redirect(url_for('dashboard'))
+    
+    zona = ZonaDelivery.query.get_or_404(zona_id)
+    
+    if request.method == "POST":
+        zona.nombre = request.form.get("nombre")
+        zona.barrios = request.form.get("barrios")
+        zona.costo_envio = request.form.get("costo_envio", type=float)
+        zona.tiempo_estimado = request.form.get("tiempo_estimado", type=int)
+        zona.orden = request.form.get("orden", type=int)
+        db.session.commit()
+        
+        flash('Zona actualizada', 'success')
+        return redirect(url_for('lista_zonas_delivery'))
+
+    return render_template("domicilios/editar_zona.html", zona=zona)
+@app.route("/zona_delivery/<int:zona_id>/toggle")
+@login_required
+def toggle_zona_delivery(zona_id):
+    """
+    RAZÓN: Activar/desactivar una zona.
+    """
+    if current_user.rol != 'admin':
+        flash('Solo administradores pueden modificar zonas', 'error')
+        return redirect(url_for('dashboard'))
+    
+    zona = ZonaDelivery.query.get_or_404(zona_id)
+    zona.activa = not zona.activa
+    db.session.commit()
+
+    estado = "activada" if zona.activa else "desactivada"
+    flash(f'Zona {zona.nombre} {estado}', 'success')
+    return redirect(url_for('lista_zonas_delivery'))
+    
+"""=========================
+API PARA DOMICILIOS (AJAX)
+========================="""
+@app.route("/api/domicilios/activos")
+@login_required
+def api_domicilios_activos():
+    """
+    RAZÓN: Endpoint para actualizar en tiempo real los domicilios activos.
+    Para pantalla de cocina o repartidores.
+    """
+    hoy = datetime.now().date()
+    inicio = datetime(hoy.year, hoy.month, hoy.day, 3, 0, 0)
+    if datetime.now().hour < 3:
+        inicio = inicio - timedelta(days=1)
+    fin = inicio + timedelta(days=1)
+    domicilios = Domicilio.query.filter(
+        Domicilio.fecha_pedido >= inicio,
+        Domicilio.fecha_pedido < fin,
+        Domicilio.estado.in_([
+            EstadoDomicilio.PENDIENTE,
+            EstadoDomicilio.PREPARANDO,
+            EstadoDomicilio.LISTO,
+            EstadoDomicilio.EN_CAMINO
+        ])
+    ).order_by(Domicilio.fecha_pedido).all()
+
+    data = []
+    for d in domicilios:
+        data.append({
+            'id': d.id,
+            'cliente': d.cliente_nombre,
+            'direccion': d.cliente_direccion,
+            'barrio': d.cliente_barrio,
+            'total': float(d.total),
+            'estado': d.estado,
+            'tiempo': d.tiempo_transcurrido,
+            'retrasado': d.esta_retrasado,
+            'items_count': len(d.items)
+        })
+
+    return jsonify(data)
+
+@app.route("/api/zona/calcular_costo", methods=["POST"])
+@login_required
+def api_calcular_costo_zona():
+
+    barrio = request.json.get('barrio', '').strip().lower()
+    zonas = ZonaDelivery.query.filter_by(activa=True).all()
+
+    for zona in zonas:
+        barrios_zona = [b.strip().lower() for b in zona.lista_barrios]
+        if barrio in barrios_zona:
+            return jsonify({
+                'success': True,
+                'zona': zona.nombre,
+                'costo': float(zona.costo_envio),
+                'tiempo_estimado': zona.tiempo_estimado
+            })
+
+    # Si no se encuentra el barrio, devolver costo por defecto
+    return jsonify({
+        'success': False,
+        'message': 'Barrio no encontrado en zonas de cobertura',
+        'costo': 3000,  # Costo por defecto
+        'tiempo_estimado': 30
+    })
+
+
+
+    # =========================
+    # EJECUCIÓN
+    # =========================
 if __name__ == "__main__":
     init_db()

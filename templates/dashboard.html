@@ -496,30 +496,39 @@
     <nav class="navbar">
         <div class="nav-container">
             <div class="nav-brand">Ivaluth Manager</div>
+
             <div class="nav-menu">
-                <a href="{{ url_for('dashboard') }}" class="nav-link active">Dashboard</a>
-                
+                <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+
                 {% if current_user.rol == 'cocina' %}
-                <a href="{{ url_for('cocina') }}" class="nav-link">📋 Cocina</a>
+                    <a href="{{ url_for('cocina') }}" class="nav-link">📋 Cocina</a>
+                    <a href="{{ url_for('lista_domicilios') }}" class="nav-link">📦 Domicilios</a>
+
                 {% else %}
-                <a href="{{ url_for('historial') }}" class="nav-link">📊 Historial</a>
-                <a href="{{ url_for('lista_facturas') }}" class="nav-link">🧾 Facturas</a>
+                    <a href="{{ url_for('historial') }}" class="nav-link">📊 Historial</a>
+                    <a href="{{ url_for('lista_facturas') }}" class="nav-link">🧾 Facturas</a>
+                    <a href="{{ url_for('lista_domicilios') }}" class="nav-link">📦 Domicilios</a>
+                    <a href="{{ url_for('nuevo_domicilio') }}" class="nav-link">➕ Nuevo Domicilio</a>
                 {% endif %}
 
                 {% if current_user.rol == 'admin' %}
-                <a href="{{ url_for('lista_gastos') }}" class="nav-link">💰 Gastos</a>
-                <a href="{{ url_for('reporte_financiero') }}" class="nav-link">📈 Reportes</a>
-                <a href="{{ url_for('administrar_menu') }}" class="nav-link">🍴 Menú</a>
-                <a href="{{ url_for('administrar_mesas') }}" class="nav-link">🪑 Mesas</a>
-                <a href="{{ url_for('administrar_usuarios') }}" class="nav-link">👥 Usuarios</a>
-                <a href="{{ url_for('configuracion_restaurante') }}" class="nav-link">⚙️ Config</a>
+                    <a href="{{ url_for('lista_gastos') }}" class="nav-link">💰 Gastos</a>
+                    <a href="{{ url_for('reporte_financiero') }}" class="nav-link">📈 Reportes</a>
+                    <a href="{{ url_for('administrar_menu') }}" class="nav-link">🍴 Menú</a>
+                    <a href="{{ url_for('administrar_mesas') }}" class="nav-link">🪑 Mesas</a>
+                    <a href="{{ url_for('administrar_usuarios') }}" class="nav-link">👥 Usuarios</a>
+                    <a href="{{ url_for('configuracion_restaurante') }}" class="nav-link">⚙️ Config</a>
                 {% endif %}
-                
-                <span class="nav-user">👤 {{ current_user.nombre }} ({{ current_user.rol|title }})</span>
+
+                <span class="nav-user">
+                    👤 {{ current_user.nombre }} ({{ current_user.rol|title }})
+                </span>
+
                 <a href="{{ url_for('logout') }}" class="nav-link nav-logout">Salir</a>
             </div>
         </div>
     </nav>
+
 
     <div class="container">
         <!-- Alerts -->
@@ -649,6 +658,7 @@
                     <div class="quick-access-title">Menú Público</div>
                     <div class="quick-access-desc">Ver menú de clientes</div>
                 </a>
+                
             </div>
         </div>
 
